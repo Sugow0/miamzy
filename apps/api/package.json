@@ -6,7 +6,7 @@
     "dev": "bun --env-file=../../.env --watch src/index.ts",
     "gen:types": "openapi-typescript ../../contracts/openapi.yaml -o src/api.d.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun --env-file=../../.env test",
     "db:migrate": "bun --env-file=../../.env prisma migrate deploy",
     "db:migrate:dev": "bun --env-file=../../.env prisma migrate dev",
     "db:seed": "bun --env-file=../../.env db/seed.ts",
