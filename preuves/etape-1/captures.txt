@@ -1,0 +1,129 @@
+# Étape 1 : les cinq routes
+
+### 1. Lister les commandes (limit=2)
+$ curl -si http://localhost:3000/v1/orders?limit=2
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:53:29 GMT
+Content-Length: 778
+
+{
+  "data": [
+    {
+      "id": "01a1f8be-5ade-7b28-98a4-b72211044193",
+      "userId": "01a1f8be-2e45-7521-90a5-b3617692e018",
+      "restaurantId": "01a1f8be-2e3f-7473-b5b9-5694f4d895a7",
+      "status": "paid",
+      "items": [
+        {
+          "dishId": "01a1f8be-2e41-7df1-9ca8-23c3b0882620",
+          "name": "Menu enfant",
+          "quantity": 1,
+          "unitPriceCents": 840
+        }
+      ],
+      "totalCents": 840,
+      "currency": "EUR",
+      "createdAt": "2026-11-20T11:36:27.102Z"
+    },
+    {
+      "id": "01a1f8be-5aae-7512-ab5e-4b93a7d0ee62",
+      "userId": "01a1f8be-2e45-7521-90a5-b3617692e018",
+      "restaurantId": "01a1f8be-2e3f-7473-b5b9-5694f4d895a7",
+      "status": "paid",
+      "items": [
+        {
+          "dishId": "01a1f8be-2e41-7df1-9ca8-23c3b0882620",
+          "name": "Menu enfant",
+          "quantity": 1,
+          "unitPriceCents": 840
+        }
+      ],
+      "totalCents": 840,
+      "currency": "EUR",
+      "createdAt": "2026-11-20T11:36:27.054Z"
+    }
+  ],
+  "nextCursor": "MDFhMWY4YmUtNWFhZS03NTEyLWFiNWUtNGI5M2E3ZDBlZTYy"
+}
+
+### 2. Voir une commande
+$ curl -si http://localhost:3000/v1/orders/01a1f8be-5ade-7b28-98a4-b72211044193
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:53:29 GMT
+Content-Length: 351
+
+{
+  "id": "01a1f8be-5ade-7b28-98a4-b72211044193",
+  "userId": "01a1f8be-2e45-7521-90a5-b3617692e018",
+  "restaurantId": "01a1f8be-2e3f-7473-b5b9-5694f4d895a7",
+  "status": "paid",
+  "items": [
+    {
+      "dishId": "01a1f8be-2e41-7df1-9ca8-23c3b0882620",
+      "name": "Menu enfant",
+      "quantity": 1,
+      "unitPriceCents": 840
+    }
+  ],
+  "totalCents": 840,
+  "currency": "EUR",
+  "createdAt": "2026-11-20T11:36:27.102Z"
+}
+
+### 3. Créer une commande (201 + Location)
+$ curl -si -X POST http://localhost:3000/v1/orders -H content-type: application/json -d {"userId":"01a1f8be-2e45-7521-90a5-b3617692e018","restaurantId":"01a1f8be-2e3f-7473-b5b9-5694f4d895a7","items":[{"dishId":"01a1f8be-2e41-7df1-9ca8-23c3b0882620","quantity":2}]}
+HTTP/1.1 201 Created
+Location: /v1/orders/01a1f93b-d360-7466-9d7a-75a7632ff438
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:53:29 GMT
+Content-Length: 355
+
+{
+  "id": "01a1f93b-d360-7466-9d7a-75a7632ff438",
+  "userId": "01a1f8be-2e45-7521-90a5-b3617692e018",
+  "restaurantId": "01a1f8be-2e3f-7473-b5b9-5694f4d895a7",
+  "status": "pending",
+  "items": [
+    {
+      "dishId": "01a1f8be-2e41-7df1-9ca8-23c3b0882620",
+      "name": "Menu enfant",
+      "quantity": 2,
+      "unitPriceCents": 840
+    }
+  ],
+  "totalCents": 1680,
+  "currency": "EUR",
+  "createdAt": "2026-11-20T13:53:29.951Z"
+}
+
+### 4. Payer une commande
+$ curl -si -X POST http://localhost:3000/v1/orders/01a1f93b-d37a-7dfc-a960-d9bbf5bc918b/payments -H content-type: application/json -H Idempotency-Key: capture-etape-1-1795182809 -d {"method":"card"}
+HTTP/1.1 201 Created
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:53:29 GMT
+Content-Length: 205
+
+{
+  "id": "01a1f93b-d38f-7625-9d0d-81f4cf6785c0",
+  "orderId": "01a1f93b-d37a-7dfc-a960-d9bbf5bc918b",
+  "method": "card",
+  "status": "succeeded",
+  "amountCents": 840,
+  "currency": "EUR",
+  "createdAt": "2026-11-20T13:53:29.998Z"
+}
+
+### 5. Voir un profil
+$ curl -si http://localhost:3000/v1/users/01a1f8be-2e45-7521-90a5-b3617692e018
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:53:29 GMT
+Content-Length: 105
+
+{
+  "id": "01a1f8be-2e45-7521-90a5-b3617692e018",
+  "firstName": "Chloé",
+  "createdAt": "2026-11-20T11:36:15.674Z"
+}
