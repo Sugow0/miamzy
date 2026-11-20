@@ -89,3 +89,14 @@ Pas de verbe dans les URLs, tout sous `/v1` (la version est dans l'URL : visible
 **Écarté :** Prisma Client pour les requêtes (masque le SQL demandé par l'étape 3), `drizzle-kit` (non demandé).
 **Infra :** le port local de Postgres est 5434 (5433 est pris par un autre projet).
 
+
+## D4 – Seed (étape 1)
+**Choix :** `apps/api/db/seed.sql` (SQL pur, `generate_series`) lancé par `bun run db:seed` (`db/seed.ts`). Résultat : 20 restaurants, 160 plats, 200 utilisateurs, 5 000 commandes, 12 500 lignes, 3 000 paiements (60 % des commandes sont payées).
+**Parce que :**
+- Le SQL reste lisible et le seed est rejouable : il vide les tables puis réinsère.
+- Les `id` sont des UUIDv7 décalés jusqu'à `created_at` (`uuidv7(created_at - now())`) : l'ordre des id suit l'ordre chronologique, donc le curseur `id DESC` de l'étape 3 est cohérent avec les dates. Vérifié : 0 inversion sur 5 000 commandes.
+- Les affectations (client, restaurant, plats) sont déterministes (arithmétique modulo, pas de `random()`), donc deux exécutions donnent la même répartition. Seules les dates dépendent de l'heure.
+**Garde-fou :** le script refuse de tourner si l'hôte de `DATABASE_URL` n'est pas `localhost` ou `127.0.0.1`, puisqu'il vide les tables.
+**Contrôles faits :** 0 total de commande différent de la somme des lignes, 0 commande sans ligne, 0 commande payée sans paiement.
+**Limite assumée :** chaque utilisateur a exactement 25 commandes. Une répartition réaliste (quelques gros clients) serait plus utile pour tester la pagination par utilisateur.
+
