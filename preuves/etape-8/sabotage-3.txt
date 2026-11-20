@@ -1,0 +1,109 @@
+# Sabotage 3 : le profil lit et renvoie aussi l'e-mail (fuite)
+# Fichier : apps/api/src/routes/users.ts
+# Avant : SELECT id, first_name, created_at FROM users WHERE id = ${id}`;
+# Après : SELECT id, first_name, created_at, email FROM users WHERE id = ${id}`;
+# Avant :         createdAt: row.created_at.toISOString(),
+      };
+# Après :         createdAt: row.created_at.toISOString(),
+        email: row.email,
+      };
+
+@miamzy/api test: bun test v1.3.13 (bf2e2cec)
+@miamzy/api test: 
+@miamzy/api test: test/profile.test.ts:
+@miamzy/api test: 17 |     w = await makeWorld();
+@miamzy/api test: 18 |   });
+@miamzy/api test: 19 | 
+@miamzy/api test: 20 |   test("le profil n'expose que id, firstName et createdAt", async () => {
+@miamzy/api test: 21 |     const res = await call(`/v1/users/${w.userId}`);
+@miamzy/api test: 22 |     expect(res.status).toBe(200);
+@miamzy/api test:                             ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: 200
+@miamzy/api test: Received: 500
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/profile.test.ts:22:24)
+@miamzy/api test: (fail) profil sans fuite (étape 5) > le profil n'expose que id, firstName et createdAt [33.86ms]
+@miamzy/api test: 51 |       "phone",
+@miamzy/api test: 52 |       "password",
+@miamzy/api test: 53 |       "passwordHash",
+@miamzy/api test: 54 |       "password_hash",
+@miamzy/api test: 55 |     ]) {
+@miamzy/api test: 56 |       expect(everything).not.toContain(`"${key}"`);
+@miamzy/api test:                                   ^
+@miamzy/api test: error: expect(received).not.toContain(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected to not contain: "\"email\""
+@miamzy/api test: Received: "{\"id\":\"01a1f94f-ffcb-792c-8cee-ef6ee0a36b30\",\"userId\":\"01a1f94f-ffc1-7e1b-88e5-54b41a888934\",\"restaurantId\":\"01a1f94f-ffc3-7cd2-ab94-8bfbfa41cad0\",\"status\":\"pending\",\"items\":[{\"dishId\":\"01a1f94f-ffc5-74ca-9947-06c4b10d26bc\",\"name\":\"Plat A\",\"quantity\":2,\"unitPriceCents\":1000},{\"dishId\":\"01a1f94f-ffc6-7e71-9066-b9b614d5839a\",\"name\":\"Plat B\",\"quantity\":1,\"unitPriceCents\":450}],\"totalCents\":2450,\"currency\":\"EUR\",\"createdAt\":\"2026-11-20T14:15:32.043Z\"}\n{\"error\":{\"code\":\"CONTRACT_VIOLATION\",\"message\":\"La réponse de getUser ne respecte pas le contrat.\",\"details\":[{\"field\":\"email\",\"issue\":\"champ inconnu\"}]}}\n{\"id\":\"01a1f94f-ffcb-792c-8cee-ef6ee0a36b30\",\"userId\":\"01a1f94f-ffc1-7e1b-88e5-54b41a888934\",\"restaurantId\":\"01a1f94f-ffc3-7cd2-ab94-8bfbfa41cad0\",\"status\":\"paid\",\"items\":[{\"dishId\":\"01a1f94f-ffc5-74ca-9947-06c4b10d26bc\",\"name\":\"Plat A\",\"quantity\":2,\"unitPriceCents\":1000},{\"dishId\":\"01a1f94f-ffc6-7e71-9066-b9b614d5839a\",\"name\":\"Plat B\",\"quantity\":1,\"unitPriceCents\":450}],\"totalCents\":2450,\"currency\":\"EUR\",\"createdAt\":\"2026-11-20T14:15:32.043Z\"}\n{\"data\":[{\"id\":\"01a1f94f-ffcb-792c-8cee-ef6ee0a36b30\",\"userId\":\"01a1f94f-ffc1-7e1b-88e5-54b41a888934\",\"restaurantId\":\"01a1f94f-ffc3-7cd2-ab94-8bfbfa41cad0\",\"status\":\"paid\",\"items\":[{\"dishId\":\"01a1f94f-ffc5-74ca-9947-06c4b10d26bc\",\"name\":\"Plat A\",\"quantity\":2,\"unitPriceCents\":1000},{\"dishId\":\"01a1f94f-ffc6-7e71-9066-b9b614d5839a\",\"name\":\"Plat B\",\"quantity\":1,\"unitPriceCents\":450}],\"totalCents\":2450,\"currency\":\"EUR\",\"createdAt\":\"2026-11-20T14:15:32.043Z\"}],\"nextCursor\":null}\n{\"data\":[{\"id\":\"01a1f94f-ffcb-792c-8cee-ef6ee0a36b30\",\"userId\":\"01a1f94f-ffc1-7e1b-88e5-54b41a888934\",\"restaurantId\":\"01a1f94f-ffc3-7cd2-ab94-8bfbfa41cad0\",\"status\":\"paid\",\"items\":[{\"dishId\":\"01a1f94f-ffc5-74ca-9947-06c4b10d26bc\",\"name\":\"Plat A\",\"quantity\":2,\"unitPriceCents\":1000},{\"dishId\":\"01a1f94f-ffc6-7e71-9066-b9b614d5839a\",\"name\":\"Plat B\",\"quantity\":1,\"unitPriceCents\":450}],\"totalCents\":2450,\"currency\":\"EUR\",\"createdAt\":\"2026-11-20T14:15:32.043Z\"}],\"nextCursor\":null}"
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/profile.test.ts:56:30)
+@miamzy/api test: (fail) profil sans fuite (étape 5) > ni l'e-mail, ni le téléphone, ni le hash n'apparaissent dans AUCUNE réponse [50.87ms]
+@miamzy/api test: 
+@miamzy/api test: test/rate-limit.test.ts:
+@miamzy/api test: 75 |     const statuses = [];
+@miamzy/api test: 76 |     for (let i = 0; i < 5; i++)
+@miamzy/api test: 77 |       statuses.push(
+@miamzy/api test: 78 |         (await call(`/v1/users/${w.userId}`, { ip: "1.1.1.1" })).status,
+@miamzy/api test: 79 |       );
+@miamzy/api test: 80 |     expect(statuses).toEqual([200, 200, 200, 429, 429]);
+@miamzy/api test:                           ^
+@miamzy/api test: error: expect(received).toEqual(expected)
+@miamzy/api test: 
+@miamzy/api test: @@ -1,5 +1,5 @@
+@miamzy/api test:   [
+@miamzy/api test: -   200,
+@miamzy/api test: -   200,
+@miamzy/api test: -   200,
+@miamzy/api test: +   500,
+@miamzy/api test: +   500,
+@miamzy/api test: +   500,
+@miamzy/api test:     429,
+@miamzy/api test: 
+@miamzy/api test: - Expected  - 3
+@miamzy/api test: + Received  + 3
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:80:22)
+@miamzy/api test: (fail) limitation de débit sur l'API (étape 6) > au-delà de la limite : 429, Retry-After numérique, même forme d'erreur [14.59ms]
+@miamzy/api test: 94 |     expect(
+@miamzy/api test: 95 |       (await call(`/v1/users/${w.userId}`, { ip: "1.1.1.1" })).status,
+@miamzy/api test: 96 |     ).toBe(429);
+@miamzy/api test: 97 |     expect(
+@miamzy/api test: 98 |       (await call(`/v1/users/${w.userId}`, { ip: "2.2.2.2" })).status,
+@miamzy/api test: 99 |     ).toBe(200);
+@miamzy/api test:            ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: 200
+@miamzy/api test: Received: 500
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:99:7)
+@miamzy/api test: (fail) limitation de débit sur l'API (étape 6) > un second client n'est pas bloqué pendant que le premier l'est [14.42ms]
+@miamzy/api test: 122 |     const statuses = [];
+@miamzy/api test: 123 |     for (let i = 0; i < 4; i++)
+@miamzy/api test: 124 |       statuses.push(
+@miamzy/api test: 125 |         (await call(`/v1/users/${w.userId}`, { ip: `9.9.9.${i}` })).status,
+@miamzy/api test: 126 |       );
+@miamzy/api test: 127 |     expect(statuses).toEqual([200, 200, 429, 429]); // tous comptés comme un seul client
+@miamzy/api test:                            ^
+@miamzy/api test: error: expect(received).toEqual(expected)
+@miamzy/api test: 
+@miamzy/api test: @@ -1,4 +1,4 @@
+@miamzy/api test:   [
+@miamzy/api test: -   200,
+@miamzy/api test: -   200,
+@miamzy/api test: +   500,
+@miamzy/api test: +   500,
+@miamzy/api test:     429,
+@miamzy/api test: 
+@miamzy/api test: - Expected  - 2
+@miamzy/api test: + Received  + 2
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:127:22)
+@miamzy/api test: (fail) limitation de débit sur l'API (étape 6) > sans TRUST_PROXY, un en-tête X-Forwarded-For forgé ne contourne pas la limite [14.88ms]
+@miamzy/api test: 
+@miamzy/api test:  39 pass
+@miamzy/api test:  5 fail
+@miamzy/api test:  178 expect() calls
+@miamzy/api test: Ran 44 tests across 7 files. [1.65s]
+@miamzy/api test: Exited with code 1

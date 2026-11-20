@@ -1,0 +1,46 @@
+# Sabotage 2 : la borne de limit passe de 100 à 100000 (liste plafonnée)
+# Fichier : contracts/openapi.yaml
+# Avant :         maximum: 100
+        default: 20
+# Après :         maximum: 100000
+        default: 20
+
+@miamzy/api test: bun test v1.3.13 (bf2e2cec)
+@miamzy/api test: 
+@miamzy/api test: test/errors.test.ts:
+@miamzy/api test: 110 |         headers: { "content-type": "application/json" },
+@miamzy/api test: 111 |       }),
+@miamzy/api test: 112 |       createOrder(call, w, { items: [] }),
+@miamzy/api test: 113 |       call("/v1/orders?limit=100000"),
+@miamzy/api test: 114 |     ]);
+@miamzy/api test: 115 |     for (const r of all) expect(isErrorShape(r.body)).toBe(true);
+@miamzy/api test:                                                             ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: true
+@miamzy/api test: Received: false
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/errors.test.ts:115:55)
+@miamzy/api test: (fail) erreurs qui disent la vérité (étape 2) et 404 > toutes ces erreurs ont exactement la même forme [16.26ms]
+@miamzy/api test: 
+@miamzy/api test: test/pagination.test.ts:
+@miamzy/api test: 28 |   });
+@miamzy/api test: 29 | 
+@miamzy/api test: 30 |   test("limit=101 et limit=100000 sont refusés : jamais plus de 100, et aucune donnée", async () => {
+@miamzy/api test: 31 |     for (const limit of ["101", "100000", "0", "-5", "abc"]) {
+@miamzy/api test: 32 |       const res = await call(`/v1/orders?limit=${limit}`);
+@miamzy/api test: 33 |       expect(res.status).toBe(400);
+@miamzy/api test:                               ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: 400
+@miamzy/api test: Received: 500
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/pagination.test.ts:33:26)
+@miamzy/api test: (fail) liste plafonnée (étape 3) > limit=101 et limit=100000 sont refusés : jamais plus de 100, et aucune donnée [35.60ms]
+@miamzy/api test: 
+@miamzy/api test:  42 pass
+@miamzy/api test:  2 fail
+@miamzy/api test:  174 expect() calls
+@miamzy/api test: Ran 44 tests across 7 files. [1369.00ms]
+@miamzy/api test: Exited with code 1
