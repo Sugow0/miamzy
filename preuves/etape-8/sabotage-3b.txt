@@ -1,0 +1,52 @@
+# Sabotage 3b : la même fuite, garde-fou du contrat désactivé : les tests la voient seuls
+# Fichier : apps/api/src/routes/users.ts
+# Avant : SELECT id, first_name, created_at FROM users WHERE id = ${id}`;
+# Après : SELECT id, first_name, created_at, email FROM users WHERE id = ${id}`;
+# Avant :         createdAt: row.created_at.toISOString(),
+      };
+# Après :         createdAt: row.created_at.toISOString(),
+        email: row.email,
+      };
+
+@miamzy/api test: bun test v1.3.13 (bf2e2cec)
+@miamzy/api test: 
+@miamzy/api test: test/profile.test.ts:
+@miamzy/api test: 18 |   });
+@miamzy/api test: 19 | 
+@miamzy/api test: 20 |   test("le profil n'expose que id, firstName et createdAt", async () => {
+@miamzy/api test: 21 |     const res = await call(`/v1/users/${w.userId}`);
+@miamzy/api test: 22 |     expect(res.status).toBe(200);
+@miamzy/api test: 23 |     expect(Object.keys(res.body).sort()).toEqual([
+@miamzy/api test:                                               ^
+@miamzy/api test: error: expect(received).toEqual(expected)
+@miamzy/api test: 
+@miamzy/api test: @@ -2,3 +2,3 @@
+@miamzy/api test:     "createdAt",
+@miamzy/api test: +   "email",
+@miamzy/api test:     "firstName",
+@miamzy/api test: 
+@miamzy/api test: - Expected  - 0
+@miamzy/api test: + Received  + 1
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/profile.test.ts:23:42)
+@miamzy/api test: (fail) profil sans fuite (étape 5) > le profil n'expose que id, firstName et createdAt [25.86ms]
+@miamzy/api test: 43 |       (await call("/v1/orders?limit=100")).text,
+@miamzy/api test: 44 |       (await call(`/v1/orders?userId=${w.userId}`)).text,
+@miamzy/api test: 45 |     ].join("\n");
+@miamzy/api test: 46 | 
+@miamzy/api test: 47 |     for (const secret of Object.values(SECRETS))
+@miamzy/api test: 48 |       expect(everything).not.toContain(secret);
+@miamzy/api test:                                   ^
+@miamzy/api test: error: expect(received).not.toContain(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected to not contain: "lea.secret@example.test"
+@miamzy/api test: Received: "{\"id\":\"01a1f950-073b-7ba8-b880-62e7e00cfc8f\",\"userId\":\"01a1f950-0731-70d2-b268-a289f16ce4a8\",\"restaurantId\":\"01a1f950-0733-7013-9739-a7fecc95a6a0\",\"status\":\"pending\",\"items\":[{\"dishId\":\"01a1f950-0734-7b94-b462-5c0e17766a06\",\"name\":\"Plat A\",\"quantity\":2,\"unitPriceCents\":1000},{\"dishId\":\"01a1f950-0736-77fe-8413-2e029a35b246\",\"name\":\"Plat B\",\"quantity\":1,\"unitPriceCents\":450}],\"totalCents\":2450,\"currency\":\"EUR\",\"createdAt\":\"2026-11-20T14:15:33.947Z\"}\n{\"id\":\"01a1f950-0731-70d2-b268-a289f16ce4a8\",\"firstName\":\"Léa\",\"createdAt\":\"2026-11-20T14:15:33.937Z\",\"email\":\"lea.secret@example.test\"}\n{\"id\":\"01a1f950-073b-7ba8-b880-62e7e00cfc8f\",\"userId\":\"01a1f950-0731-70d2-b268-a289f16ce4a8\",\"restaurantId\":\"01a1f950-0733-7013-9739-a7fecc95a6a0\",\"status\":\"paid\",\"items\":[{\"dishId\":\"01a1f950-0734-7b94-b462-5c0e17766a06\",\"name\":\"Plat A\",\"quantity\":2,\"unitPriceCents\":1000},{\"dishId\":\"01a1f950-0736-77fe-8413-2e029a35b246\",\"name\":\"Plat B\",\"quantity\":1,\"unitPriceCents\":450}],\"totalCents\":2450,\"currency\":\"EUR\",\"createdAt\":\"2026-11-20T14:15:33.947Z\"}\n{\"data\":[{\"id\":\"01a1f950-073b-7ba8-b880-62e7e00cfc8f\",\"userId\":\"01a1f950-0731-70d2-b268-a289f16ce4a8\",\"restaurantId\":\"01a1f950-0733-7013-9739-a7fecc95a6a0\",\"status\":\"paid\",\"items\":[{\"dishId\":\"01a1f950-0734-7b94-b462-5c0e17766a06\",\"name\":\"Plat A\",\"quantity\":2,\"unitPriceCents\":1000},{\"dishId\":\"01a1f950-0736-77fe-8413-2e029a35b246\",\"name\":\"Plat B\",\"quantity\":1,\"unitPriceCents\":450}],\"totalCents\":2450,\"currency\":\"EUR\",\"createdAt\":\"2026-11-20T14:15:33.947Z\"}],\"nextCursor\":null}\n{\"data\":[{\"id\":\"01a1f950-073b-7ba8-b880-62e7e00cfc8f\",\"userId\":\"01a1f950-0731-70d2-b268-a289f16ce4a8\",\"restaurantId\":\"01a1f950-0733-7013-9739-a7fecc95a6a0\",\"status\":\"paid\",\"items\":[{\"dishId\":\"01a1f950-0734-7b94-b462-5c0e17766a06\",\"name\":\"Plat A\",\"quantity\":2,\"unitPriceCents\":1000},{\"dishId\":\"01a1f950-0736-77fe-8413-2e029a35b246\",\"name\":\"Plat B\",\"quantity\":1,\"unitPriceCents\":450}],\"totalCents\":2450,\"currency\":\"EUR\",\"createdAt\":\"2026-11-20T14:15:33.947Z\"}],\"nextCursor\":null}"
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/profile.test.ts:48:30)
+@miamzy/api test: (fail) profil sans fuite (étape 5) > ni l'e-mail, ni le téléphone, ni le hash n'apparaissent dans AUCUNE réponse [32.30ms]
+@miamzy/api test: 
+@miamzy/api test:  42 pass
+@miamzy/api test:  2 fail
+@miamzy/api test:  179 expect() calls
+@miamzy/api test: Ran 44 tests across 7 files. [1.75s]
+@miamzy/api test: Exited with code 1

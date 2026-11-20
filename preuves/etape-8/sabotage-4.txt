@@ -1,0 +1,149 @@
+# Sabotage 4 : le limiteur laisse tout passer (limitation de débit)
+# Fichier : apps/api/src/rate-limit.ts
+# Avant : const allowed = bucket.tokens >= 1;
+# Après : const allowed = true;
+
+@miamzy/api test: bun test v1.3.13 (bf2e2cec)
+@miamzy/api test: 
+@miamzy/api test: test/rate-limit.test.ts:
+@miamzy/api test: 20 |       true,
+@miamzy/api test: 21 |       true,
+@miamzy/api test: 22 |       true,
+@miamzy/api test: 23 |     ]);
+@miamzy/api test: 24 |     const refused = limiter.consume("a");
+@miamzy/api test: 25 |     expect(refused).toEqual({ allowed: false, retryAfterSec: 1 });
+@miamzy/api test:                          ^
+@miamzy/api test: error: expect(received).toEqual(expected)
+@miamzy/api test: 
+@miamzy/api test:   {
+@miamzy/api test: -   "allowed": false,
+@miamzy/api test: -   "retryAfterSec": 1,
+@miamzy/api test: +   "allowed": true,
+@miamzy/api test: +   "retryAfterSec": 0,
+@miamzy/api test:   }
+@miamzy/api test: 
+@miamzy/api test: - Expected  - 2
+@miamzy/api test: + Received  + 2
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:25:21)
+@miamzy/api test: (fail) seau à jetons (unitaire, horloge simulée) > laisse passer la rafale, puis refuse avec le temps d'attente exact [0.25ms]
+@miamzy/api test: 31 |       refillPerSec: 0.1,
+@miamzy/api test: 32 |       trustProxy: false,
+@miamzy/api test: 33 |       now: () => 0,
+@miamzy/api test: 34 |     });
+@miamzy/api test: 35 |     limiter.consume("a");
+@miamzy/api test: 36 |     expect(limiter.consume("a").retryAfterSec).toBe(10);
+@miamzy/api test:                                                     ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: 10
+@miamzy/api test: Received: 0
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:36:48)
+@miamzy/api test: (fail) seau à jetons (unitaire, horloge simulée) > Retry-After suit le débit : à 0,1 jeton/s, il faut attendre 10 secondes [0.04ms]
+@miamzy/api test: 38 | 
+@miamzy/api test: 39 |   test("le seau se recharge avec le temps, sans dépasser sa capacité", () => {
+@miamzy/api test: 40 |     let t = 0;
+@miamzy/api test: 41 |     const limiter = createRateLimiter({ ...config, now: () => t });
+@miamzy/api test: 42 |     for (let i = 0; i < 3; i++) limiter.consume("a");
+@miamzy/api test: 43 |     expect(limiter.consume("a").allowed).toBe(false);
+@miamzy/api test:                                               ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: false
+@miamzy/api test: Received: true
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:43:42)
+@miamzy/api test: (fail) seau à jetons (unitaire, horloge simulée) > le seau se recharge avec le temps, sans dépasser sa capacité [0.05ms]
+@miamzy/api test: 50 |   });
+@miamzy/api test: 51 | 
+@miamzy/api test: 52 |   test("deux clients ont chacun leur seau", () => {
+@miamzy/api test: 53 |     const limiter = createRateLimiter({ ...config, now: () => 0 });
+@miamzy/api test: 54 |     for (let i = 0; i < 3; i++) limiter.consume("a");
+@miamzy/api test: 55 |     expect(limiter.consume("a").allowed).toBe(false);
+@miamzy/api test:                                               ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: false
+@miamzy/api test: Received: true
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:55:42)
+@miamzy/api test: (fail) seau à jetons (unitaire, horloge simulée) > deux clients ont chacun leur seau [0.04ms]
+@miamzy/api test: 75 |     const statuses = [];
+@miamzy/api test: 76 |     for (let i = 0; i < 5; i++)
+@miamzy/api test: 77 |       statuses.push(
+@miamzy/api test: 78 |         (await call(`/v1/users/${w.userId}`, { ip: "1.1.1.1" })).status,
+@miamzy/api test: 79 |       );
+@miamzy/api test: 80 |     expect(statuses).toEqual([200, 200, 200, 429, 429]);
+@miamzy/api test:                           ^
+@miamzy/api test: error: expect(received).toEqual(expected)
+@miamzy/api test: 
+@miamzy/api test: @@ -4,4 +4,4 @@
+@miamzy/api test:     200,
+@miamzy/api test: -   429,
+@miamzy/api test: -   429,
+@miamzy/api test: +   200,
+@miamzy/api test: +   200,
+@miamzy/api test:   ]
+@miamzy/api test: 
+@miamzy/api test: - Expected  - 2
+@miamzy/api test: + Received  + 2
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:80:22)
+@miamzy/api test: (fail) limitation de débit sur l'API (étape 6) > au-delà de la limite : 429, Retry-After numérique, même forme d'erreur [23.05ms]
+@miamzy/api test: 91 |     const call = client(makeApp({ capacity: 2, refillPerSec: 0.001 }));
+@miamzy/api test: 92 |     for (let i = 0; i < 4; i++)
+@miamzy/api test: 93 |       await call(`/v1/users/${w.userId}`, { ip: "1.1.1.1" });
+@miamzy/api test: 94 |     expect(
+@miamzy/api test: 95 |       (await call(`/v1/users/${w.userId}`, { ip: "1.1.1.1" })).status,
+@miamzy/api test: 96 |     ).toBe(429);
+@miamzy/api test:            ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: 429
+@miamzy/api test: Received: 200
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:96:7)
+@miamzy/api test: (fail) limitation de débit sur l'API (étape 6) > un second client n'est pas bloqué pendant que le premier l'est [13.52ms]
+@miamzy/api test: 108 |     expect(accepted).toBeGreaterThan(0); // témoin : les requêtes acceptées, elles, lisent la base
+@miamzy/api test: 109 | 
+@miamzy/api test: 110 |     for (let i = 0; i < 20; i++) {
+@miamzy/api test: 111 |       expect(
+@miamzy/api test: 112 |         (await call(`/v1/users/${w.userId}`, { ip: "3.3.3.3" })).status,
+@miamzy/api test: 113 |       ).toBe(429);
+@miamzy/api test:               ^
+@miamzy/api test: error: expect(received).toBe(expected)
+@miamzy/api test: 
+@miamzy/api test: Expected: 429
+@miamzy/api test: Received: 200
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:113:9)
+@miamzy/api test: (fail) limitation de débit sur l'API (étape 6) > une requête refusée ne touche PAS la base [11.60ms]
+@miamzy/api test: 122 |     const statuses = [];
+@miamzy/api test: 123 |     for (let i = 0; i < 4; i++)
+@miamzy/api test: 124 |       statuses.push(
+@miamzy/api test: 125 |         (await call(`/v1/users/${w.userId}`, { ip: `9.9.9.${i}` })).status,
+@miamzy/api test: 126 |       );
+@miamzy/api test: 127 |     expect(statuses).toEqual([200, 200, 429, 429]); // tous comptés comme un seul client
+@miamzy/api test:                            ^
+@miamzy/api test: error: expect(received).toEqual(expected)
+@miamzy/api test: 
+@miamzy/api test: @@ -3,4 +3,4 @@
+@miamzy/api test:     200,
+@miamzy/api test: -   429,
+@miamzy/api test: -   429,
+@miamzy/api test: +   200,
+@miamzy/api test: +   200,
+@miamzy/api test:   ]
+@miamzy/api test: 
+@miamzy/api test: - Expected  - 2
+@miamzy/api test: + Received  + 2
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/rate-limit.test.ts:127:22)
+@miamzy/api test: (fail) limitation de débit sur l'API (étape 6) > sans TRUST_PROXY, un en-tête X-Forwarded-For forgé ne contourne pas la limite [23.69ms]
+@miamzy/api test: 
+@miamzy/api test:  36 pass
+@miamzy/api test:  8 fail
+@miamzy/api test:  160 expect() calls
+@miamzy/api test: Ran 44 tests across 7 files. [1485.00ms]
+@miamzy/api test: Exited with code 1
