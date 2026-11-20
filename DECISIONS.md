@@ -109,3 +109,11 @@ Pas de verbe dans les URLs, tout sous `/v1` (la version est dans l'URL : visible
 **Dépendances épinglées :** hono 4.13.19, ajv 8.20.0, ajv-formats 3.0.1, yaml 2.9.1, openapi-typescript 7.13.0.
 **TypeScript 5.9.3, pas 7.0.2 :** `openapi-typescript` utilise l'API du compilateur (`ts.factory`) que TypeScript 7 (version native) n'expose plus. Son pair déclaré est `^5.x`.
 **Limites assumées :** les messages `issue` des erreurs de validation sont ceux d'Ajv (en anglais) ; la validation contre le contrat est du code maison (`contract.ts`) que le groupe doit pouvoir expliquer ; aucun test automatisé pour l'instant (étape 8).
+
+## D6 – Erreurs (étape 2)
+**Choix :** une seule classe `ApiError` (statut, code stable, message, détails) et deux gestionnaires globaux (`onError`, `notFound`) : aucune route ne fabrique elle-même un corps d'erreur. Les erreurs de validation passent toutes par `messages.ts`, qui traduit les erreurs Ajv en français (« doit être un nombre entier », « au moins 1 élément requis »).
+**Parce que :** « un bloc d'erreur dupliqué = une fonction manquante ». Un seul point de fabrication garantit la forme unique, et un seul fichier à relire pour les messages.
+**Distinction 400 / 422 (déjà dans D1, appliquée ici) :** 400 = on ne peut pas lire la requête (JSON cassé, corps vide, UUID invalide, paramètre hors bornes) ; 422 = lisible mais refusée (panier vide, mauvais type, champ inconnu).
+**Jamais de 500 pour une entrée client :** JSON illisible et corps vide donnent 400. Les vraies erreurs serveur sont journalisées côté serveur et renvoyées avec un message générique (aucun détail interne au client).
+**Vérifié :** 8 cas (404 commande, 422 panier vide, 400 JSON cassé, 400 corps vide, 422 mauvais type, 400 UUID invalide, 404 route inconnue, 404 plat inconnu) : `jq` contrôle que chaque corps a exactement les clés `error.code`, `error.details`, `error.message`.
+**Limite assumée :** les 5xx ne sont pas déclarés dans le contrat (ni donc validés par `VALIDATE_RESPONSES`).
