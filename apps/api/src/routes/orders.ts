@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { components } from "../api";
 import { ApiError, notFound } from "../errors";
 import { type Env, operation, readBody } from "../http";
+import { discountFor } from "../pricing";
 
 type Order = components["schemas"]["Order"];
 type OrderItem = components["schemas"]["OrderItem"];
@@ -15,6 +16,8 @@ type OrderRow = {
   restaurant_id: string;
   status: Order["status"];
   total_cents: number;
+  discount_cents: number;
+  promo_code: string | null;
   currency: string;
   created_at: Date;
 };
@@ -65,6 +68,8 @@ function toOrder(row: OrderRow, items: ItemRow[]): Order {
       }),
     ),
     totalCents: row.total_cents,
+    discountCents: row.discount_cents,
+    promoCode: row.promo_code,
     currency: row.currency,
     createdAt: row.created_at.toISOString(),
   };
@@ -85,7 +90,7 @@ async function withItems(sql: SQL, rows: OrderRow[]): Promise<Order[]> {
 
 export async function fetchOrder(sql: SQL, id: string): Promise<Order | null> {
   const rows: OrderRow[] = await sql`
-    SELECT id, user_id, restaurant_id, status, total_cents, currency, created_at
+    SELECT id, user_id, restaurant_id, status, total_cents, discount_cents, promo_code, currency, created_at
     FROM orders WHERE id = ${id}`;
   return (await withItems(sql, rows))[0] ?? null;
 }
@@ -102,7 +107,7 @@ export function ordersRoutes(sql: SQL) {
         const after = params.cursor ? decodeCursor(params.cursor) : null;
         // On lit limit + 1 lignes : la ligne en trop dit s'il existe une page suivante.
         const rows: OrderRow[] = await sql`
-          SELECT id, user_id, restaurant_id, status, total_cents, currency, created_at
+          SELECT id, user_id, restaurant_id, status, total_cents, discount_cents, promo_code, currency, created_at
           FROM orders
           WHERE true
           ${after ? sql`AND id < ${after}` : sql``}
@@ -208,15 +213,42 @@ export function ordersRoutes(sql: SQL) {
         );
       }
       const currency = lines[0]?.dish.currency as string;
-      const totalCents = lines.reduce(
+      const subtotalCents = lines.reduce(
         (sum, l) => sum + l.dish.price_cents * l.quantity,
         0,
       );
 
+      // Code promo (contrat 1.1.0) : optionnel. Sans lui, rien ne change par rapport à 1.0.0.
+      let promoCode: string | null = null;
+      let discountCents = 0;
+      if (body.promoCode !== undefined) {
+        const [promo] = await sql`
+          SELECT code, percent_off FROM promo_codes
+          WHERE code = ${body.promoCode} AND active
+            AND (expires_at IS NULL OR expires_at > now())`;
+        // Inconnu, désactivé, expiré : même réponse, pour ne pas révéler quels codes existent.
+        if (!promo) {
+          throw new ApiError(
+            422,
+            "PROMO_CODE_INVALID",
+            "Ce code promo n'est pas valable : vérifiez le code saisi.",
+            [
+              {
+                field: "promoCode",
+                issue: "code inconnu, désactivé ou expiré",
+              },
+            ],
+          );
+        }
+        promoCode = promo.code;
+        discountCents = discountFor(subtotalCents, promo.percent_off);
+      }
+      const totalCents = subtotalCents - discountCents;
+
       const orderId = await sql.begin(async (tx) => {
         const [created] = await tx`
-          INSERT INTO orders (user_id, restaurant_id, total_cents, currency)
-          VALUES (${body.userId}, ${body.restaurantId}, ${totalCents}, ${currency})
+          INSERT INTO orders (user_id, restaurant_id, total_cents, discount_cents, promo_code, currency)
+          VALUES (${body.userId}, ${body.restaurantId}, ${totalCents}, ${discountCents}, ${promoCode}, ${currency})
           RETURNING id`;
         const rows = lines.map((l) => ({
           order_id: created.id,
