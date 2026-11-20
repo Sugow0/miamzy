@@ -183,3 +183,25 @@ ORDER BY id;
 **Limites assumées :**
 - Aucune comparaison du corps au rejeu : aujourd'hui un seul moyen de paiement existe (`card`), donc le même envoi ne peut pas différer. Dès qu'il y en aura plusieurs, une clé rejouée avec un autre corps devra être refusée en 422.
 - Le paiement est simulé (aucun prestataire) : l'idempotence protège l'écriture en base, pas un vrai débit chez un tiers, qui exigerait sa propre clé d'idempotence côté prestataire.
+
+## D9 – Profil sans fuite (étape 5)
+**Choix :** le profil expose `id`, `firstName`, `createdAt`. Jamais `email`, `phone` ni `password_hash`, **par aucune route**. Aucune route ne renvoie un objet utilisateur complet : les commandes ne portent que `userId`.
+**Pourquoi trois barrières indépendantes (une fuite exige qu'elles cèdent toutes) :**
+1. **La requête** : liste blanche de colonnes (`SELECT id, first_name, created_at`). Les données sensibles ne sont même pas lues en mémoire, donc impossibles à sérialiser par mégarde. Avec `SELECT *` suivi d'un « retrait » de champs, un champ ajouté demain à la table fuirait par défaut ; ici il reste caché par défaut.
+2. **Le contrat** : le schéma `User` a `additionalProperties: false` et les mêmes trois champs. Avec `VALIDATE_RESPONSES=true`, une réponse qui porterait un champ de plus devient une 500 `CONTRACT_VIOLATION`.
+3. **Le détecteur** (`preuves/etape-5`) : il prend les vraies valeurs sensibles d'un utilisateur et les cherche dans toutes les réponses de l'API.
+**Pourquoi `firstName` est exposé :** le front doit pouvoir afficher « Bonjour Chloé » ou le nom d'un livreur. C'est la donnée la moins sensible utile ; elle ne permet ni de contacter ni d'identifier la personne seule.
+**Écarté :** filtrer côté front (« le front ne l'affiche pas ») : l'API reste lisible avec curl, la donnée a donc déjà fuité ; un champ `isPublic` par utilisateur (inutile pour l'instant).
+
+**Vérifié** (`preuves/etape-5/captures.txt`, rejouable) :
+- colonnes de la table : `id, first_name, email, phone, password_hash, created_at` ; clés de la réponse : `id, firstName, createdAt` ; jamais exposées : `email, passwordHash, phone` ;
+- ~310 ko de réponses analysées (profil, listes de commandes ×7, détail, création, paiement) : **0** occurrence de l'e-mail, du téléphone et du hash réels de l'utilisateur ;
+- **témoin positif** : le même détecteur trouve bien le prénom (exposé) : il n'est pas muet ;
+- 0 clé interdite (`email`, `phone`, `password_hash`, `passwordHash`, `homeAddress`, `iban`) dans aucune réponse.
+
+**Limites assumées :**
+- `GET /v1/users/{id}` est ouvert à tous tant qu'il n'y a pas d'authentification (bloc 2) : n'importe qui peut lire le prénom de n'importe quel utilisateur dont il connaît l'UUID. L'UUIDv7 n'est pas énumérable, mais ce n'est pas un contrôle d'accès.
+- Le détecteur ne cherche que les valeurs de **cet** utilisateur dans les routes appelées : il ne prouve pas l'absence de fuite sur un champ ajouté plus tard (c'est le rôle des barrières 1 et 2, et des tests de l'étape 8).
+- Le mot de passe est un hash factice dans le seed : le hachage réel (argon2) viendra avec l'authentification.
+
+**Code de cette étape :** aucun changement. Le profil et le contrat étaient déjà ainsi depuis l'étape 1 ; cette PR justifie le choix et le prouve.
