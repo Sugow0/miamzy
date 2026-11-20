@@ -74,3 +74,18 @@ Pas de verbe dans les URLs, tout sous `/v1` (la version est dans l'URL : visible
 - Les fichiers `.md` sont exclus : le formateur Markdown réécrivait ce journal en cassant la structure des listes.
 **Écarté :** ESLint + Prettier (deux outils, deux configs, plus lent).
 
+
+## D3 – Prisma pour le schéma et les migrations
+**Choix :** Prisma 7.10.1 (CLI seulement, épinglée) gère `apps/api/prisma/schema.prisma` et les migrations. Les requêtes de l'API restent en SQL brut (`Bun.sql`) : le client Prisma n'est ni installé ni généré.
+**Parce que :**
+- Une source de vérité du schéma, versionnée, et des migrations rejouables (`migrate deploy`) sur n'importe quelle machine, y compris celle de la démo.
+- On garde la maîtrise du SQL de l'idempotence (`ON CONFLICT`) et de la pagination, que l'étape 3 demande de copier dans le journal.
+**Contournements :**
+- `uuidv7()` n'est pas natif Prisma : `@default(dbgenerated("uuidv7()"))`, le défaut est côté base (le seed en SQL en profite).
+- Les `CHECK` (montants positifs, devise `^[A-Z]{3}$`, quantité 1 à 99) ne sont pas exprimables dans `schema.prisma` : ils sont ajoutés à la main à la fin de la migration `init`, avant son application. `bun run db:drift` confirme l'absence de dérive.
+- Unicité du paiement par commande (`payments.order_id`) déclarée dans le schéma (`@unique`), donc 1 commande = au plus 1 paiement, même sous concurrence.
+**Règles :** ne jamais modifier une migration déjà appliquée (checksum) ; `migrate dev` uniquement en local (il peut réinitialiser la base), `migrate deploy` partout ailleurs.
+**Version :** `latest` sur npm pointe sur un RC (8.0.0-rc.34) ; on reste sur la dernière stable (7.10.1).
+**Écarté :** Prisma Client pour les requêtes (masque le SQL demandé par l'étape 3), `drizzle-kit` (non demandé).
+**Infra :** le port local de Postgres est 5434 (5433 est pris par un autre projet).
+
