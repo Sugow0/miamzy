@@ -1,4 +1,4 @@
-import { SQL } from "bun";
+import { type Server, SQL } from "bun";
 import { createApp } from "./app";
 
 const url = process.env.DATABASE_URL;
@@ -11,5 +11,7 @@ const app = createApp(new SQL(url));
 
 export default {
   port: Number(process.env.PORT ?? 3000),
-  fetch: app.fetch,
+  // `server` donne accès à l'IP de la connexion (clé du limiteur).
+  fetch: (request: Request, server: Server<unknown>) =>
+    app.fetch(request, { server }),
 };
