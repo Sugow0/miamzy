@@ -1,0 +1,6 @@
+$ psql -c "SELECT ... counts"
+ restaurants | orders | payments 
+-------------+--------+----------
+          20 |   5004 |     3003
+(1 row)
+

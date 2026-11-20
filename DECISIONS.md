@@ -74,3 +74,38 @@ Pas de verbe dans les URLs, tout sous `/v1` (la version est dans l'URL : visible
 - Les fichiers `.md` sont exclus : le formateur Markdown réécrivait ce journal en cassant la structure des listes.
 **Écarté :** ESLint + Prettier (deux outils, deux configs, plus lent).
 
+
+## D3 – Prisma pour le schéma et les migrations
+**Choix :** Prisma 7.10.1 (CLI seulement, épinglée) gère `apps/api/prisma/schema.prisma` et les migrations. Les requêtes de l'API restent en SQL brut (`Bun.sql`) : le client Prisma n'est ni installé ni généré.
+**Parce que :**
+- Une source de vérité du schéma, versionnée, et des migrations rejouables (`migrate deploy`) sur n'importe quelle machine, y compris celle de la démo.
+- On garde la maîtrise du SQL de l'idempotence (`ON CONFLICT`) et de la pagination, que l'étape 3 demande de copier dans le journal.
+**Contournements :**
+- `uuidv7()` n'est pas natif Prisma : `@default(dbgenerated("uuidv7()"))`, le défaut est côté base (le seed en SQL en profite).
+- Les `CHECK` (montants positifs, devise `^[A-Z]{3}$`, quantité 1 à 99) ne sont pas exprimables dans `schema.prisma` : ils sont ajoutés à la main à la fin de la migration `init`, avant son application. `bun run db:drift` confirme l'absence de dérive.
+- Unicité du paiement par commande (`payments.order_id`) déclarée dans le schéma (`@unique`), donc 1 commande = au plus 1 paiement, même sous concurrence.
+**Règles :** ne jamais modifier une migration déjà appliquée (checksum) ; `migrate dev` uniquement en local (il peut réinitialiser la base), `migrate deploy` partout ailleurs.
+**Version :** `latest` sur npm pointe sur un RC (8.0.0-rc.34) ; on reste sur la dernière stable (7.10.1).
+**Écarté :** Prisma Client pour les requêtes (masque le SQL demandé par l'étape 3), `drizzle-kit` (non demandé).
+**Infra :** le port local de Postgres est 5434 (5433 est pris par un autre projet).
+
+
+## D4 – Seed (étape 1)
+**Choix :** `apps/api/db/seed.sql` (SQL pur, `generate_series`) lancé par `bun run db:seed` (`db/seed.ts`). Résultat : 20 restaurants, 160 plats, 200 utilisateurs, 5 000 commandes, 12 500 lignes, 3 000 paiements (60 % des commandes sont payées).
+**Parce que :**
+- Le SQL reste lisible et le seed est rejouable : il vide les tables puis réinsère.
+- Les `id` sont des UUIDv7 décalés jusqu'à `created_at` (`uuidv7(created_at - now())`) : l'ordre des id suit l'ordre chronologique, donc le curseur `id DESC` de l'étape 3 est cohérent avec les dates. Vérifié : 0 inversion sur 5 000 commandes.
+- Les affectations (client, restaurant, plats) sont déterministes (arithmétique modulo, pas de `random()`), donc deux exécutions donnent la même répartition. Seules les dates dépendent de l'heure.
+**Garde-fou :** le script refuse de tourner si l'hôte de `DATABASE_URL` n'est pas `localhost` ou `127.0.0.1`, puisqu'il vide les tables.
+**Contrôles faits :** 0 total de commande différent de la somme des lignes, 0 commande sans ligne, 0 commande payée sans paiement.
+**Limite assumée :** chaque utilisateur a exactement 25 commandes. Une répartition réaliste (quelques gros clients) serait plus utile pour tester la pagination par utilisateur.
+
+
+## D5 – Routes de l'étape 1 : le contrat pilote le code
+**Choix :** `contracts/openapi.yaml` est lu au démarrage (`src/contract.ts`). Les validateurs de paramètres, de corps et de réponses (Ajv, JSON Schema 2020-12) en sont dérivés : aucun schéma n'est recopié dans le code. Les types TypeScript viennent de `openapi-typescript` (`bun run gen:types`, fichier `src/api.d.ts` commité). Chaque handler est lié à un `operationId` du contrat.
+**Parce que :** si le contrat change, le code ne compile plus ou la validation échoue. Il ne peut pas dériver en silence.
+**Garde-fou :** `VALIDATE_RESPONSES=true` compare chaque réponse au contrat et la transforme en 500 `CONTRACT_VIOLATION` en cas d'écart (dev et tests). Les 5xx ne sont pas déclarés dans le contrat, donc non contrôlés.
+**Règles de comportement ajoutées au contrat (POST /v1/orders) :** prix lus en base ; plat inconnu = 404, plat d'un autre restaurant ou en double = 422.
+**Dépendances épinglées :** hono 4.13.19, ajv 8.20.0, ajv-formats 3.0.1, yaml 2.9.1, openapi-typescript 7.13.0.
+**TypeScript 5.9.3, pas 7.0.2 :** `openapi-typescript` utilise l'API du compilateur (`ts.factory`) que TypeScript 7 (version native) n'expose plus. Son pair déclaré est `^5.x`.
+**Limites assumées :** les messages `issue` des erreurs de validation sont ceux d'Ajv (en anglais) ; la validation contre le contrat est du code maison (`contract.ts`) que le groupe doit pouvoir expliquer ; aucun test automatisé pour l'instant (étape 8).
