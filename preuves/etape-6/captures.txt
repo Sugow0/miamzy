@@ -1,0 +1,34 @@
+# Étape 6 : limitation de débit (seau de 60 jetons, recharge 1 par seconde, par IP)
+
+### A. 200 requêtes d'affilée depuis un même client (10.0.0.1)
+HTTP 200 : 61 requêtes
+HTTP 429 : 139 requêtes
+
+### B. Ce que reçoit le client refusé : 429, Retry-After, message qui dit quand réessayer
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+Retry-After: 1
+Date: Fri, 20 Nov 2026 13:59:43 GMT
+Content-Length: 104
+
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Trop de requêtes. Réessayez dans 1 seconde.",
+    "details": []
+  }
+}
+
+### C. Un SECOND client n'est pas bloqué pendant que le premier l'est
+client 10.0.0.1 -> HTTP 429  (toujours limité)
+client 10.0.0.2 -> HTTP 200
+
+### D. Après avoir attendu Retry-After (1 s), le client refusé repasse
+client 10.0.0.1 -> HTTP 200
+
+### E. Une requête refusée ne touche PAS la base
+Mesure : lectures de la table users (seq_scan + idx_scan, compteurs Postgres).
+GET /v1/users/{id} fait exactement 1 lecture par requête acceptée.
+requêtes envoyées : 200 | acceptées (200) : 61 | refusées (429) : 139
+lectures de la table users : avant 50131, après 50192, donc +61
+=> +61 = nombre de requêtes acceptées : les 139 refusées n'ont rien lu.

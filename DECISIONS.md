@@ -205,3 +205,22 @@ ORDER BY id;
 - Le mot de passe est un hash factice dans le seed : le hachage réel (argon2) viendra avec l'authentification.
 
 **Code de cette étape :** aucun changement. Le profil et le contrat étaient déjà ainsi depuis l'étape 1 ; cette PR justifie le choix et le prouve.
+
+## D10 – Limitation de débit (étape 6)
+**Les quatre questions du TP :**
+- **Compter par quoi ?** Par **IP du client**, faute d'authentification (bloc 2). Dès que les utilisateurs sont identifiés, la clé devra devenir « utilisateur ou clé d'API, l'IP en secours » : une IP partagée (une école de 800 élèves derrière une même adresse, cas 6 du TP) bloquerait des innocents en bloc. Pour l'instant la limite est assez large pour que ce cas ne se déclenche pas en usage normal, mais c'est une faiblesse réelle. `X-Forwarded-For` n'est lu que si `TRUST_PROXY=true` : sans cela, n'importe quel client écrirait l'en-tête de son choix et contournerait la limite. Même avec `TRUST_PROXY=true`, cela n'a de sens que derrière un proxy qui **écrase** l'en-tête.
+- **Quelle limite ?** Seau de **60 jetons**, recharge **1 par seconde** (= 60 requêtes par minute soutenues, 60 d'un coup en rafale). Point de départ : un usage humain normal (ouvrir un écran = 3 à 5 requêtes, faire défiler = environ 1 requête toutes les 2 à 3 s) tourne autour de 20 à 30 par minute ; la limite fait 2 à 3 fois cela, assez pour ne jamais gêner un vrai client, assez basse pour arrêter un script qui boucle. **Limite de ce choix :** un client qui interroge exactement 1 fois par seconde (le partenaire du cas 6) reste juste sous le seuil. Baisser `RATE_LIMIT_REFILL_PER_SEC` le bloquerait, au risque de gêner les vrais clients : à régler avec des mesures réelles, pas sur une intuition.
+- **Contrôler avant ou après la base ?** **Avant**, tout au début de la chaîne (`app.use` en premier). Un contrôle après la base protège le quota mais pas la base, qui est précisément la ressource à préserver. Vérifié : sur 200 requêtes, 61 acceptées et 139 refusées, la table `users` a été lue **61** fois (pas 200).
+- **Et avec 3 serveurs ?** Le compteur actuel vit dans la mémoire d'**un seul processus**. Avec 3 serveurs derrière un répartiteur, chacun compte à part : un client obtient en pratique **3 fois** la limite, et le résultat dépend du serveur qui répond. Trois remèdes, du plus simple au plus juste : (1) **affinité par IP** au répartiteur (une IP va toujours au même serveur) : les compteurs redeviennent justes sans rien partager, mais la charge se répartit mal et un serveur qui tombe remet les compteurs à zéro ; (2) **limite divisée par N** : approximatif, faux dès qu'un serveur s'arrête ; (3) **un compteur partagé** (Redis, seau à jetons dans un script Lua atomique) : exact, au prix d'un aller-retour réseau par requête et d'un composant dont la panne impose de choisir entre laisser passer (on perd la protection) et refuser (on perd le service). **Recommandation : (3) en production.** **Non implémenté ici** : `consume(clé)` est le point d'insertion (il deviendrait asynchrone).
+
+**Algorithme :** seau à jetons, pas fenêtre fixe. Une fenêtre fixe laisse passer le double de la limite à cheval sur deux fenêtres (60 requêtes à 11:59:59, 60 à 12:00:00). Le seau se recharge en continu : pas de frontière à exploiter. `Retry-After` = secondes avant le prochain jeton.
+
+**Réponse refusée :** `429 RATE_LIMITED`, en-tête `Retry-After` (déjà déclaré dans le contrat), message qui dit combien attendre, même forme d'erreur que les autres.
+
+**Mémoire :** au plus 100 000 clients suivis ; au-delà, le moins récemment vu est oublié. Faiblesse : un attaquant qui change d'adresse très souvent peut évincer un client limité, qui repart alors avec un seau plein.
+
+**Vérifié** (`preuves/etape-6/captures.txt`, rejouable) : 200 requêtes d'affilée = 61 × `200` et 139 × `429` ; un second client reste servi pendant que le premier est limité ; après `Retry-After` le premier repasse ; les refusées ne touchent pas la base (+61 lectures pour 61 acceptées).
+
+**Effet de bord pour la suite :** les scripts de preuve des étapes 1 à 5 enchaînent plus de 60 requêtes (par exemple le parcours des 51 pages). Pour les rejouer : `RATE_LIMIT_CAPACITY=100000`.
+
+**Limite assumée :** pas d'en-têtes `RateLimit-Remaining` sur les réponses réussies (non déclarés dans le contrat). Le contrat n'a pas changé.
