@@ -1,0 +1,40 @@
+# Étape 5 : profil sans fuite
+
+### A. Colonnes de la table users (ce que la base contient)
+id
+first_name
+email
+phone
+password_hash
+created_at
+
+### B. Réponse de GET /v1/users/{id}
+
+### profil
+$ curl -si http://localhost:3000/v1/users/01a1f8be-2e45-7521-90a5-b3617692e018
+HTTP/1.1 200 OK
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:57:54 GMT
+Content-Length: 105
+
+{
+  "id": "01a1f8be-2e45-7521-90a5-b3617692e018",
+  "firstName": "Chloé",
+  "createdAt": "2026-11-20T11:36:15.674Z"
+}
+
+### C. Clés de la réponse comparées aux colonnes
+colonnes de la table : createdAt email firstName id passwordHash phone
+clés de la réponse   : createdAt firstName id
+colonnes exposées     : createdAt firstName id 
+colonnes JAMAIS exposées : email passwordHash phone 
+
+### D. Détecteur de fuite : les vraies valeurs sensibles de cet utilisateur
+   apparaissent-elles dans une réponse de l'API ?
+   (email=user100@example.test, téléphone=+33600000100, hash=$seed$not-a-real-h…)
+   octets analysés : 309911
+   occurrences de "user100@example.test" : 0
+   occurrences de "+33600000100" : 0
+   occurrences de "$seed$not-a-real-hash$" : 0
+   témoin positif (le prénom, lui, EST exposé) "Chloé" : 1 occurrences -> le détecteur fonctionne
+   clés interdites dans n'importe quelle réponse : 0
