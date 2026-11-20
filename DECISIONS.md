@@ -268,3 +268,32 @@ ORDER BY id;
 - Le risque résiduel (ancienne app stricte lisant une commande avec code) est étroit mais pas nul.
 - `GET /v1/orders` n'a pas de filtre pour masquer les commandes avec code aux anciennes versions : sans authentification, l'API ne sait pas quelle version d'app l'appelle.
 - Les codes promo n'ont pas d'API de gestion (création, désactivation) : ils sont insérés par seed ou en SQL. Hors des cinq besoins du TP.
+
+## D12 – Filet de sécurité : les tests (étape 8)
+**Quels tests, et ce que chacun vérifie au-delà du statut HTTP** (44 tests, 7 fichiers, `bun run test`, environ 1 s) :
+| Fichier | Ce qui est vérifié |
+|---|---|
+| `payment` | même clé ×3 = 1 ligne en base et 3 corps identiques au caractère près ; ×5 en **parallèle** = 1 ligne ; autre clé sur commande payée = 409 et toujours 1 ligne ; 5 clés en parallèle = un seul 201 ; sans clé = 400 et **0 ligne** |
+| `pagination` | défaut = 20 lignes sur 150 ; maximum = 100 ; 101, 100000, 0, -5, `abc` refusés **sans aucune donnée** ; 4 pages de 40, 150 ids distincts, ordre décroissant ; curseur stable quand 10 commandes arrivent entre deux pages |
+| `profile` | clés **exactes** du profil ; e-mail, téléphone et hash introuvables dans 5 types de réponses, avec témoin positif (le prénom est bien trouvé) ; le garde-fou du contrat refuse un champ en trop |
+| `errors` | 404 (commande, utilisateur, route) avec code stable ; 4 JSON illisibles = 400, jamais 500 ; champ en cause nommé (`items.0.quantity`) ; toutes les erreurs ont **exactement** la même forme |
+| `rate-limit` | seau à jetons en horloge simulée (rafale, recharge, plafond, mémoire bornée) ; 429 + `Retry-After` numérique ; second client servi ; **0 appel à la base** pendant 20 refus ; en-tête forgé sans effet hors `TRUST_PROXY` |
+| `promo` | sans code : **exactement les 8 clés de la 1.0.0** ; avec code : total, remise figée ; 3 codes invalides = même corps ; arrondi ; la base refuse une remise sans code |
+| `orders` | prix lus en base, figés après coup ; relecture identique ; plat d'un autre restaurant refusé sans rien écrire |
+
+**Base de test isolée et gardée.** Les tests vident les tables : `test/setup.ts` refuse de tourner si la base ne se termine pas par `_test`, si elle est identique à `DATABASE_URL`, ou si l'hôte n'est pas local. Elle est créée et migrée automatiquement (mêmes migrations que le développement).
+
+**Le garde-fou du contrat reste actif pendant les tests** (`VALIDATE_RESPONSES=true`) : chaque réponse de chaque test est aussi comparée au contrat. Contrepartie vue lors du sabotage : il **masque** les assertions du test (une fuite devient une 500 avant d'atteindre le détecteur de secrets). D'où la variante `VALIDATE_RESPONSES=false` du sabotage 3b : sans le garde-fou, les tests de profil détectent la fuite seuls.
+
+**Preuve de sabotage** (`preuves/etape-8/`, `saboter.sh`) : on retire une protection, un test doit virer au rouge, puis le fichier est restauré par git. Résultat : 44 verts ; sabotage 1 (rejeu de paiement non reconnu) = 2 rouges, les deux tests d'idempotence ; sabotage 2 (`maximum` 100 → 100 000) = 2 rouges, dont le test du plafond ; sabotage 3 (le profil renvoie l'e-mail) = 5 rouges, dont les 2 tests du profil ; sabotage 3b (même fuite, garde-fou coupé) = 2 rouges, les 2 tests du profil ; sabotage 4 (limiteur ouvert) = 8 rouges.
+
+**Trois erreurs trouvées pendant cette étape (à ne pas retomber dedans) :**
+1. **Un sabotage mal conçu aurait fait une fausse preuve.** Ma première version du sabotage « fuite » écrivait dans une propriété que le code ne lit jamais : aucune fuite réelle, et c'est un test de 404 sans rapport qui avait cassé (`row` indéfini). Seule la lecture de **quel test** échoue l'a révélé : un nombre de rouges ne suffit pas, il faut vérifier que ce sont les bons.
+2. **`bun run test` à la racine n'exécutait rien** et rendait le code 0 (la syntaxe `bun --cwd` était invalide : Bun affichait son aide). Présent depuis l'étape 0. Corrigé avec `bun run --filter @miamzy/api`. Un script qui « réussit » sans rien faire est pire qu'un script qui échoue.
+3. **Un test se bloquait sans message** : `expect(sql\`…\`).rejects` n'attend pas correctement une requête Bun SQL (objet « thenable » paresseux). Il faut l'envelopper dans une fonction `async`.
+
+**Limites assumées :**
+- Pas d'intégration continue : les tests ne tournent que si quelqu'un les lance.
+- Les tests utilisent de petits jeux d'essai, pas le seed de 5 000 commandes : ils ne prouvent pas les performances (c'est le rôle de `preuves/etape-3/explain.txt`).
+- Aucune couverture mesurée : 44 tests ne garantissent pas que tout est testé.
+- Les tests de limitation de débit utilisent la route du profil comme cible : si cette route casse, ils cassent aussi (visible au sabotage 3).
