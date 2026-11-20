@@ -27,6 +27,12 @@ export interface paths {
          *     Erreurs métier : un `dishId` inconnu donne 404 (`DISH_NOT_FOUND`) ; un plat
          *     d'un autre restaurant, un plat en double ou un panier vide donnent 422
          *     (`DISH_NOT_IN_RESTAURANT`, `DUPLICATE_DISH`, `EMPTY_CART`).
+         *
+         *     Code promo (1.1.0) : remise en pourcentage sur la somme des lignes,
+         *     arrondie à l'entier le plus proche, 0,5 vers le haut
+         *     (`remise = floor((somme × pourcentage + 50) / 100)`). Un code inconnu,
+         *     désactivé ou expiré donne la même réponse 422 `PROMO_CODE_INVALID`, pour
+         *     ne pas révéler quels codes existent.
          */
         post: operations["createOrder"];
         delete?: never;
@@ -131,7 +137,12 @@ export interface components {
             restaurantId: string;
             status: components["schemas"]["OrderStatus"];
             items: components["schemas"]["OrderItem"][];
+            /** @description Montant à payer, remise déduite (somme des lignes - `discountCents`). */
             totalCents: number;
+            /** @description Remise appliquée, 0 sans code promo (ajouté en 1.1.0). */
+            discountCents: number;
+            /** @description Code promo appliqué, `null` sans code (ajouté en 1.1.0). */
+            promoCode: string | null;
             currency: components["schemas"]["Currency"];
             createdAt: components["schemas"]["Timestamp"];
         };
@@ -145,6 +156,8 @@ export interface components {
             restaurantId: string;
             /** Format: uuid */
             userId: string;
+            /** @description Code promo, optionnel (ajouté en 1.1.0). Une requête sans ce champ se comporte exactement comme en 1.0.0. */
+            promoCode?: string;
             items: {
                 /** Format: uuid */
                 dishId: string;

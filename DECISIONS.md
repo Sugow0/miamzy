@@ -224,3 +224,31 @@ ORDER BY id;
 **Effet de bord pour la suite :** les scripts de preuve des étapes 1 à 5 enchaînent plus de 60 requêtes (par exemple le parcours des 51 pages). Pour les rejouer : `RATE_LIMIT_CAPACITY=100000`.
 
 **Limite assumée :** pas d'en-têtes `RateLimit-Remaining` sur les réponses réussies (non déclarés dans le contrat). Le contrat n'a pas changé.
+
+## D11 – Codes promo sans casse (étape 7)
+**Contexte :** 40 000 applications installées, qu'on ne peut pas forcer à se mettre à jour. Le contrat passe en **1.1.0**.
+
+**Ce qui est ajouté, et si ça casse :**
+| Changement | Casse ? | Pourquoi |
+|---|---|---|
+| `POST /v1/orders` : champ **optionnel** `promoCode` | Non | Une ancienne app ne l'envoie pas : sa requête est acceptée comme avant. |
+| Réponse `Order` : champs `discountCents` et `promoCode` **ajoutés** | Non, **sous une hypothèse** | Une ancienne app qui lit `id`, `totalCents`… ne regarde pas les nouveaux champs. Casse seulement un décodeur **strict** (qui refuse une clé inconnue). À confirmer avec l'équipe mobile avant la mise en production : c'est le seul risque de cette évolution. |
+| Nouvelle erreur `422 PROMO_CODE_INVALID` | Non | Elle n'apparaît que si le client envoie un code, donc seulement pour du code écrit après la 1.1.0. |
+| `totalCents` | Non, **sens inchangé** | C'est toujours « le montant à payer ». Sans code promo : identique à avant. Avec : remise déduite. Un champ `totalCents` qui garderait le prix avant remise obligerait les anciennes apps à calculer la remise elles-mêmes. |
+
+**Ce qu'on n'a PAS fait (et pourquoi) :**
+- **Pas de renommage ni de suppression** : `totalCents` n'est pas devenu `subtotalCents` + `totalCents`, ce qui aurait changé le sens d'un champ lu par 40 000 apps.
+- **Pas de `v2`.** Une v2 n'est nécessaire que lorsqu'un champ existant change de sens, est supprimé ou devient obligatoire en entrée. Ici rien de tel. **`/v1` continue de fonctionner à l'identique** et n'est dépréciée à aucune date : elle est la version courante.
+- **Aucun champ obligatoire côté requête** : `promoCode` est optionnel.
+
+**Règles métier :**
+- Remise en pourcentage sur la somme des lignes. **Arrondi à l'entier le plus proche, 0,5 vers le haut** : `remise = floor((somme × pourcentage + 50) / 100)`. Exemple : 10 % de 4 505 centimes = 450,5 → **451**. Écrit dans le contrat et testé. Sans règle écrite, deux développeurs obtiendraient deux totaux différents.
+- **Un code inconnu, désactivé ou expiré donne la même réponse** (`422 PROMO_CODE_INVALID`, même message) : distinguer « n'existe pas » de « expiré » permettrait de deviner quels codes existent. Contrepartie : un client honnête ne sait pas pourquoi son code est refusé ; le message l'invite à vérifier le code.
+- `422` et pas `404` : le code promo n'est pas une ressource que le client adresse, c'est une donnée de sa requête qui est refusée.
+- Une commande avec code est stockée avec son `promoCode` et sa `discountCents` : le prix payé ne bouge plus si le pourcentage du code change ensuite (même logique que `unitPriceCents`).
+
+**Migration (« élargir, puis plus tard resserrer »)** : deux colonnes ajoutées à `orders` (`promo_code` nullable, `discount_cents` avec défaut 0) et une table `promo_codes`. Rien n'est modifié ni supprimé, donc l'ancien code et la nouvelle base cohabitent : on peut déployer la migration avant le code, ou revenir au code précédent sans toucher à la base.
+
+**Ordre des commits de cette PR** (le contrat d'abord, comme à l'étape 0) : contrat 1.1.0 → migration et seed → code → preuves. Le commit du contrat laisse volontairement `tsc` en erreur (`toOrder` ne respecte plus le contrat) : c'est le contrat qui pilote le code.
+
+**Note sur D7 :** la requête de la liste lit maintenant deux colonnes de plus (`promo_code`, `discount_cents`). Même forme, même plan (`LIMIT`, parcours de la clé primaire).
