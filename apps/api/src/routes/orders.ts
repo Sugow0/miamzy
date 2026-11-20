@@ -68,10 +68,13 @@ function toOrder(row: OrderRow, items: ItemRow[]): Order {
       }),
     ),
     totalCents: row.total_cents,
-    discountCents: row.discount_cents,
-    promoCode: row.promo_code,
     currency: row.currency,
     createdAt: row.created_at.toISOString(),
+    // Seulement avec un code promo : sans code, la réponse reste celle de la 1.0.0.
+    ...(row.promo_code !== null && {
+      discountCents: row.discount_cents,
+      promoCode: row.promo_code,
+    }),
   };
 }
 
