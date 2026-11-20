@@ -1,0 +1,19 @@
+{
+  "name": "miamzy",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "api": "bun --cwd apps/api run dev",
+    "test": "bun --cwd apps/api test",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8"
+  }
+}

@@ -62,3 +62,15 @@ Pas de verbe dans les URLs, tout sous `/v1` (la version est dans l'URL : visible
 `GET /v1/orders` · `GET /v1/orders/{id}` · `POST /v1/orders` (le restaurant dans le corps) · `POST /v1/orders/{id}/payments` (en-tête `Idempotency-Key` obligatoire, choisi par le client) · `GET /v1/users/{id}`.
 **Limite assumée :** sans authentification, `GET /v1/orders` est ouvert à tous (filtre `?userId=`). Le bloc 2 devra fermer ce trou.
 
+
+## D2 – Biome pour le lint et le format
+**Choix :** Biome 2.6.8 (épinglée, à la racine du monorepo) pour le lint et le formatage du TypeScript, du JSON et du YAML. Commandes : `bun run lint`, `bun run lint:fix`, `bun run format`.
+**Parce que :**
+- Un seul outil, une seule config (`biome.json`), à la place du couple ESLint + Prettier. Moins de dépendances à expliquer à la démo.
+- Il lit le YAML : il a détecté un `:` non protégé qui rendait `contracts/openapi.yaml` invalide.
+- Indentation à 2 espaces pour rester cohérent avec les `package.json` que Bun réécrit (sinon chaque `bun add` crée une dérive de style).
+**Limites assumées :**
+- Biome contrôle la syntaxe et le style du YAML, pas la validité OpenAPI (`$ref` cassées, champs requis manquants). Un vrai linter OpenAPI (Redocly ou Spectral) reste à ajouter, en version épinglée.
+- Les fichiers `.md` sont exclus : le formateur Markdown réécrivait ce journal en cassant la structure des listes.
+**Écarté :** ESLint + Prettier (deux outils, deux configs, plus lent).
+

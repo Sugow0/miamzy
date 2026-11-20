@@ -18,4 +18,3 @@ miamzy/
 cp .env.example .env
 bun run db:up
 ```
-# miamzy
