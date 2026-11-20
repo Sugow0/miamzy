@@ -139,10 +139,10 @@ export interface components {
             items: components["schemas"]["OrderItem"][];
             /** @description Montant à payer, remise déduite (somme des lignes - `discountCents`). */
             totalCents: number;
-            /** @description Remise appliquée, 0 sans code promo (ajouté en 1.1.0). */
-            discountCents: number;
-            /** @description Code promo appliqué, `null` sans code (ajouté en 1.1.0). */
-            promoCode: string | null;
+            /** @description Remise appliquée, en centimes. Présent UNIQUEMENT si un code promo a été appliqué (ajouté en 1.1.0) : une commande sans code est identique, octet pour octet, à celle de la 1.0.0. */
+            discountCents?: number;
+            /** @description Code promo appliqué. Présent UNIQUEMENT avec `discountCents` (ajouté en 1.1.0). */
+            promoCode?: string;
             currency: components["schemas"]["Currency"];
             createdAt: components["schemas"]["Timestamp"];
         };

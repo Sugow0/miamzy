@@ -232,9 +232,11 @@ ORDER BY id;
 | Changement | Casse ? | Pourquoi |
 |---|---|---|
 | `POST /v1/orders` : champ **optionnel** `promoCode` | Non | Une ancienne app ne l'envoie pas : sa requête est acceptée comme avant. |
-| Réponse `Order` : champs `discountCents` et `promoCode` **ajoutés** | Non, **sous une hypothèse** | Une ancienne app qui lit `id`, `totalCents`… ne regarde pas les nouveaux champs. Casse seulement un décodeur **strict** (qui refuse une clé inconnue). À confirmer avec l'équipe mobile avant la mise en production : c'est le seul risque de cette évolution. |
+| Réponse `Order` : champs `discountCents` et `promoCode`, présents **seulement si un code a été appliqué** | Non | Une commande sans code est identique, octet pour octet, à celle de la 1.0.0. Une ancienne app n'envoie jamais de code : elle ne rencontre pas les nouveaux champs. **Risque résiduel, étroit :** une ancienne app à décodeur strict qui lirait la liste d'un utilisateur ayant passé une commande avec code depuis une app récente (elle ne casserait que sur ces commandes-là). |
 | Nouvelle erreur `422 PROMO_CODE_INVALID` | Non | Elle n'apparaît que si le client envoie un code, donc seulement pour du code écrit après la 1.1.0. |
 | `totalCents` | Non, **sens inchangé** | C'est toujours « le montant à payer ». Sans code promo : identique à avant. Avec : remise déduite. Un champ `totalCents` qui garderait le prix avant remise obligerait les anciennes apps à calculer la remise elles-mêmes. |
+
+**Décision révisée avant la mise en ligne.** Première version : `discountCents` et `promoCode` toujours présents dans la réponse (valeurs `0` et `null` sans code). Le contrôle de compatibilité avec le contrat 1.0.0 (`apps/api/scripts/compat.ts`) a montré qu'une app **stricte** (qui refuse une clé inconnue) aurait refusé **102 réponses sur 102**, y compris les commandes sans code. Cela reposait sur une hypothèse invérifiable ici (« les apps ignorent les champs inconnus ») avec un effet maximal si elle était fausse : toutes les commandes illisibles pour 40 000 apps. D'où le choix actuel : champs présents seulement avec un code. **Coût :** le contrat a deux propriétés optionnelles, et un client doit tester leur présence (au lieu de lire `0` / `null`). Acceptable : mieux vaut un client récent un peu plus verbeux qu'une rupture pour les anciens.
 
 **Ce qu'on n'a PAS fait (et pourquoi) :**
 - **Pas de renommage ni de suppression** : `totalCents` n'est pas devenu `subtotalCents` + `totalCents`, ce qui aurait changé le sens d'un champ lu par 40 000 apps.

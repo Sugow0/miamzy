@@ -15,7 +15,8 @@ info:
     Historique :
     - 1.1.0 (additif, aucune rupture, pas de v2) : codes promo. Requête
       `POST /v1/orders` : champ optionnel `promoCode`. Réponse `Order` : champs
-      `discountCents` et `promoCode` ajoutés. Nouvelle erreur 422
+      `discountCents` et `promoCode` ajoutés, présents seulement si un code a été
+      appliqué (une commande sans code ne change pas d'un octet). Nouvelle erreur 422
       `PROMO_CODE_INVALID`. Aucun champ renommé, supprimé ni rendu obligatoire
       côté requête ; `totalCents` garde son sens (le montant à payer).
     - 1.0.0 : version initiale.
@@ -262,8 +263,6 @@ components:
           status,
           items,
           totalCents,
-          discountCents,
-          promoCode,
           currency,
           createdAt,
         ]
@@ -292,11 +291,16 @@ components:
             (somme des lignes - `discountCents`).
         discountCents:
           type: integer
-          minimum: 0
-          description: Remise appliquée, 0 sans code promo (ajouté en 1.1.0).
+          minimum: 1
+          description: >-
+            Remise appliquée, en centimes. Présent UNIQUEMENT si un code promo a
+            été appliqué (ajouté en 1.1.0) : une commande sans code est
+            identique, octet pour octet, à celle de la 1.0.0.
         promoCode:
-          type: [string, "null"]
-          description: Code promo appliqué, `null` sans code (ajouté en 1.1.0).
+          type: string
+          description: >-
+            Code promo appliqué. Présent UNIQUEMENT avec `discountCents`
+            (ajouté en 1.1.0).
         currency:
           $ref: "#/components/schemas/Currency"
         createdAt:
