@@ -100,3 +100,12 @@ Pas de verbe dans les URLs, tout sous `/v1` (la version est dans l'URL : visible
 **Contrôles faits :** 0 total de commande différent de la somme des lignes, 0 commande sans ligne, 0 commande payée sans paiement.
 **Limite assumée :** chaque utilisateur a exactement 25 commandes. Une répartition réaliste (quelques gros clients) serait plus utile pour tester la pagination par utilisateur.
 
+
+## D5 – Routes de l'étape 1 : le contrat pilote le code
+**Choix :** `contracts/openapi.yaml` est lu au démarrage (`src/contract.ts`). Les validateurs de paramètres, de corps et de réponses (Ajv, JSON Schema 2020-12) en sont dérivés : aucun schéma n'est recopié dans le code. Les types TypeScript viennent de `openapi-typescript` (`bun run gen:types`, fichier `src/api.d.ts` commité). Chaque handler est lié à un `operationId` du contrat.
+**Parce que :** si le contrat change, le code ne compile plus ou la validation échoue. Il ne peut pas dériver en silence.
+**Garde-fou :** `VALIDATE_RESPONSES=true` compare chaque réponse au contrat et la transforme en 500 `CONTRACT_VIOLATION` en cas d'écart (dev et tests). Les 5xx ne sont pas déclarés dans le contrat, donc non contrôlés.
+**Règles de comportement ajoutées au contrat (POST /v1/orders) :** prix lus en base ; plat inconnu = 404, plat d'un autre restaurant ou en double = 422.
+**Dépendances épinglées :** hono 4.13.19, ajv 8.20.0, ajv-formats 3.0.1, yaml 2.9.1, openapi-typescript 7.13.0.
+**TypeScript 5.9.3, pas 7.0.2 :** `openapi-typescript` utilise l'API du compilateur (`ts.factory`) que TypeScript 7 (version native) n'expose plus. Son pair déclaré est `^5.x`.
+**Limites assumées :** les messages `issue` des erreurs de validation sont ceux d'Ajv (en anglais) ; la validation contre le contrat est du code maison (`contract.ts`) que le groupe doit pouvoir expliquer ; aucun test automatisé pour l'instant (étape 8).
