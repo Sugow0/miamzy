@@ -5,13 +5,18 @@
     "apps/*"
   ],
   "scripts": {
-    "api": "bun --cwd apps/api run dev",
-    "test": "bun --cwd apps/api test",
+    "api": "bun run --filter @miamzy/api dev",
+    "test": "bun run --filter @miamzy/api test",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "typecheck": "bun run --filter @miamzy/api typecheck",
+    "db:migrate": "bun run --filter @miamzy/api db:migrate",
+    "db:seed": "bun run --filter @miamzy/api db:seed",
+    "db:status": "bun run --filter @miamzy/api db:status",
+    "gen:types": "bun run --filter @miamzy/api gen:types"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8"

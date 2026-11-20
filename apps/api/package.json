@@ -1,0 +1,28 @@
+{
+  "name": "@miamzy/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../../.env --watch src/index.ts",
+    "gen:types": "openapi-typescript ../../contracts/openapi.yaml -o src/api.d.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun --env-file=../../.env test",
+    "db:migrate": "bun --env-file=../../.env prisma migrate deploy",
+    "db:migrate:dev": "bun --env-file=../../.env prisma migrate dev",
+    "db:seed": "bun --env-file=../../.env db/seed.ts",
+    "db:status": "bun --env-file=../../.env prisma migrate status",
+    "db:drift": "bun --env-file=../../.env prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.5",
+    "openapi-typescript": "7.13.0",
+    "prisma": "7.10.1",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "hono": "4.13.19",
+    "yaml": "2.9.1"
+  }
+}

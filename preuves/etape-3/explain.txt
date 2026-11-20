@@ -1,0 +1,89 @@
+# Total de lignes dans la table : 5004
+
+### Page par défaut (limit 20 -> LIMIT 21), requête réelle de l'API
+SELECT id, user_id, restaurant_id, status, total_cents, currency, created_at FROM orders WHERE true ORDER BY id DESC LIMIT 21
+--
+Limit (actual rows=21.00 loops=1)
+  Buffers: shared hit=5
+  ->  Index Scan Backward using orders_pkey on orders (actual rows=21.00 loops=1)
+        Index Searches: 1
+        Buffers: shared hit=5
+Planning:
+  Buffers: shared hit=140
+
+### Page maximale (limit 100 -> LIMIT 101)
+SELECT id, user_id, restaurant_id, status, total_cents, currency, created_at FROM orders WHERE true ORDER BY id DESC LIMIT 101
+--
+Limit (actual rows=101.00 loops=1)
+  Buffers: shared hit=7
+  ->  Index Scan Backward using orders_pkey on orders (actual rows=101.00 loops=1)
+        Index Searches: 1
+        Buffers: shared hit=7
+Planning:
+  Buffers: shared hit=140
+
+### Page suivante (curseur)
+SELECT id, user_id, restaurant_id, status, total_cents, currency, created_at FROM orders WHERE true AND id < '01a19c67-bbc1-7da2-a34e-f8e8ce02f0b4' ORDER BY id DESC LIMIT 21
+--
+Limit (actual rows=21.00 loops=1)
+  Buffers: shared hit=4
+  ->  Index Scan Backward using orders_pkey on orders (actual rows=21.00 loops=1)
+        Index Cond: (id < '01a19c67-bbc1-7da2-a34e-f8e8ce02f0b4'::uuid)
+        Index Searches: 1
+        Buffers: shared hit=4
+Planning:
+  Buffers: shared hit=143
+
+### Filtre par utilisateur
+SELECT id, user_id, restaurant_id, status, total_cents, currency, created_at FROM orders WHERE true AND user_id = '01a1f8be-2e44-7a3d-b951-6acc26a49657' ORDER BY id DESC LIMIT 21
+--
+Limit (actual rows=21.00 loops=1)
+  Buffers: shared hit=30
+  ->  Sort (actual rows=21.00 loops=1)
+        Sort Key: id DESC
+        Sort Method: quicksort  Memory: 28kB
+        Buffers: shared hit=30
+        ->  Bitmap Heap Scan on orders (actual rows=25.00 loops=1)
+              Recheck Cond: (user_id = '01a1f8be-2e44-7a3d-b951-6acc26a49657'::uuid)
+              Heap Blocks: exact=25
+              Buffers: shared hit=27
+              ->  Bitmap Index Scan on orders_user_id_id_idx (actual rows=25.00 loops=1)
+                    Index Cond: (user_id = '01a1f8be-2e44-7a3d-b951-6acc26a49657'::uuid)
+                    Index Searches: 1
+                    Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=140
+
+### Lignes de commande de la page (une seule requête pour les 20 commandes, pas 20 requêtes)
+SELECT order_id, dish_id, name, quantity, unit_price_cents FROM order_items WHERE order_id IN ('01a1f93b-d37a-7dfc-a960-d9bbf5bc918b','01a1f93b-d360-7466-9d7a-75a7632ff438','01a1f8be-5ade-7b28-98a4-b72211044193','01a1f8be-5aae-7512-ab5e-4b93a7d0ee62','01a1f8b5-21a5-7766-ac29-55cb28be1678','01a1f89d-9a81-7ff7-8b6e-7c3de4efbf56','01a1f88c-1b28-7d9a-8b3c-7d95004c2f9c','01a1f866-6113-7aea-85d0-312976a11145','01a1f857-6741-747b-8e3c-24071af65bee','01a1f83d-a953-74f1-9fcb-b6d487097190','01a1f82f-c734-78a4-9d13-35fd944e853b','01a1f80a-98f1-747f-a5f6-86d35b944d04','01a1f7f9-7f02-70fb-97fe-c0e08a0a51da','01a1f7e1-b0ce-7311-83f1-620ecf7271b2','01a1f7c3-4e16-7bc7-81a1-22d3896dee85','01a1f7ae-0d42-796f-8da1-081ec2344be5','01a1f792-2f5c-7fa3-9821-692d1e08cc5c','01a1f778-9724-769c-9ad3-d3d12bb47ec4','01a1f762-33ca-7936-9e74-efee224564d7','01a1f758-3f52-710e-991b-a618aa1fe2d0') ORDER BY id
+--
+Sort (actual rows=44.00 loops=1)
+  Sort Key: id
+  Sort Method: quicksort  Memory: 28kB
+  Buffers: shared hit=45
+  ->  Bitmap Heap Scan on order_items (actual rows=44.00 loops=1)
+        Recheck Cond: (order_id = ANY ('{01a1f93b-d37a-7dfc-a960-d9bbf5bc918b,01a1f93b-d360-7466-9d7a-75a7632ff438,01a1f8be-5ade-7b28-98a4-b72211044193,01a1f8be-5aae-7512-ab5e-4b93a7d0ee62,01a1f8b5-21a5-7766-ac29-55cb28be1678,01a1f89d-9a81-7ff7-8b6e-7c3de4efbf56,01a1f88c-1b28-7d9a-8b3c-7d95004c2f9c,01a1f866-6113-7aea-85d0-312976a11145,01a1f857-6741-747b-8e3c-24071af65bee,01a1f83d-a953-74f1-9fcb-b6d487097190,01a1f82f-c734-78a4-9d13-35fd944e853b,01a1f80a-98f1-747f-a5f6-86d35b944d04,01a1f7f9-7f02-70fb-97fe-c0e08a0a51da,01a1f7e1-b0ce-7311-83f1-620ecf7271b2,01a1f7c3-4e16-7bc7-81a1-22d3896dee85,01a1f7ae-0d42-796f-8da1-081ec2344be5,01a1f792-2f5c-7fa3-9821-692d1e08cc5c,01a1f778-9724-769c-9ad3-d3d12bb47ec4,01a1f762-33ca-7936-9e74-efee224564d7,01a1f758-3f52-710e-991b-a618aa1fe2d0}'::uuid[]))
+        Heap Blocks: exact=40
+        Buffers: shared hit=42
+        ->  Bitmap Index Scan on order_items_order_id_idx (actual rows=44.00 loops=1)
+              Index Cond: (order_id = ANY ('{01a1f93b-d37a-7dfc-a960-d9bbf5bc918b,01a1f93b-d360-7466-9d7a-75a7632ff438,01a1f8be-5ade-7b28-98a4-b72211044193,01a1f8be-5aae-7512-ab5e-4b93a7d0ee62,01a1f8b5-21a5-7766-ac29-55cb28be1678,01a1f89d-9a81-7ff7-8b6e-7c3de4efbf56,01a1f88c-1b28-7d9a-8b3c-7d95004c2f9c,01a1f866-6113-7aea-85d0-312976a11145,01a1f857-6741-747b-8e3c-24071af65bee,01a1f83d-a953-74f1-9fcb-b6d487097190,01a1f82f-c734-78a4-9d13-35fd944e853b,01a1f80a-98f1-747f-a5f6-86d35b944d04,01a1f7f9-7f02-70fb-97fe-c0e08a0a51da,01a1f7e1-b0ce-7311-83f1-620ecf7271b2,01a1f7c3-4e16-7bc7-81a1-22d3896dee85,01a1f7ae-0d42-796f-8da1-081ec2344be5,01a1f792-2f5c-7fa3-9821-692d1e08cc5c,01a1f778-9724-769c-9ad3-d3d12bb47ec4,01a1f762-33ca-7936-9e74-efee224564d7,01a1f758-3f52-710e-991b-a618aa1fe2d0}'::uuid[]))
+              Index Searches: 1
+              Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=137
+
+### Gros client : 20 000 commandes, transaction annulée (ROLLBACK)
+BEGIN
+INSERT 0 20000
+ANALYZE
+commandes de cet utilisateur : 20025
+Limit (actual rows=21.00 loops=1)
+  Buffers: shared hit=3
+  ->  Index Scan Backward using orders_pkey on orders (actual rows=21.00 loops=1)
+        Filter: (user_id = '01a1f8be-2e44-7a3d-b951-6acc26a49657'::uuid)
+        Index Searches: 1
+        Buffers: shared hit=3
+Planning:
+  Buffers: shared hit=29
+ROLLBACK
+-- Après ROLLBACK : 5004 commandes (inchangé)

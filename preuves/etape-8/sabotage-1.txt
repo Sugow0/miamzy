@@ -1,0 +1,62 @@
+# Sabotage 1 : le rejeu d'un paiement n'est plus reconnu (idempotence)
+# Fichier : apps/api/src/routes/payments.ts
+# Avant : if (byKey && byKey.order_id === orderId) return byKey; // rejeu : même réponse
+# Après : // SABOTAGE : le rejeu n'est plus reconnu
+
+@miamzy/api test: bun test v1.3.13 (bf2e2cec)
+@miamzy/api test: 
+@miamzy/api test: test/payment.test.ts:
+@miamzy/api test: 29 |     const order = (await createOrder(call, w)).body;
+@miamzy/api test: 30 |     const responses = [];
+@miamzy/api test: 31 |     for (let i = 0; i < 3; i++)
+@miamzy/api test: 32 |       responses.push(await pay(order.id, "cle-de-test-0001"));
+@miamzy/api test: 33 | 
+@miamzy/api test: 34 |     expect(responses.map((r) => r.status)).toEqual([201, 201, 201]);
+@miamzy/api test:                                                 ^
+@miamzy/api test: error: expect(received).toEqual(expected)
+@miamzy/api test: 
+@miamzy/api test: @@ -2,4 +2,4 @@
+@miamzy/api test:     201,
+@miamzy/api test: -   201,
+@miamzy/api test: -   201,
+@miamzy/api test: +   409,
+@miamzy/api test: +   409,
+@miamzy/api test:   ]
+@miamzy/api test: 
+@miamzy/api test: - Expected  - 2
+@miamzy/api test: + Received  + 2
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/payment.test.ts:34:44)
+@miamzy/api test: (fail) double paiement (étape 4) > la même clé envoyée 3 fois : 1 seul paiement en base, 3 réponses identiques [28.12ms]
+@miamzy/api test: 42 |   test("5 envois SIMULTANÉS avec la même clé : 1 seul paiement", async () => {
+@miamzy/api test: 43 |     const order = (await createOrder(call, w)).body;
+@miamzy/api test: 44 |     const responses = await Promise.all(
+@miamzy/api test: 45 |       Array.from({ length: 5 }, () => pay(order.id, "cle-simultanee-01")),
+@miamzy/api test: 46 |     );
+@miamzy/api test: 47 |     expect(responses.map((r) => r.status)).toEqual([201, 201, 201, 201, 201]);
+@miamzy/api test:                                                 ^
+@miamzy/api test: error: expect(received).toEqual(expected)
+@miamzy/api test: 
+@miamzy/api test: @@ -2,6 +2,6 @@
+@miamzy/api test:     201,
+@miamzy/api test: -   201,
+@miamzy/api test: -   201,
+@miamzy/api test: -   201,
+@miamzy/api test: -   201,
+@miamzy/api test: +   409,
+@miamzy/api test: +   409,
+@miamzy/api test: +   409,
+@miamzy/api test: +   409,
+@miamzy/api test:   ]
+@miamzy/api test: 
+@miamzy/api test: - Expected  - 4
+@miamzy/api test: + Received  + 4
+@miamzy/api test: 
+@miamzy/api test:       at <anonymous> (/Users/sugow/Documents/Ynov/M2/web-services/miamzy/apps/api/test/payment.test.ts:47:44)
+@miamzy/api test: (fail) double paiement (étape 4) > 5 envois SIMULTANÉS avec la même clé : 1 seul paiement [16.53ms]
+@miamzy/api test: 
+@miamzy/api test:  42 pass
+@miamzy/api test:  2 fail
+@miamzy/api test:  182 expect() calls
+@miamzy/api test: Ran 44 tests across 7 files. [1253.00ms]
+@miamzy/api test: Exited with code 1

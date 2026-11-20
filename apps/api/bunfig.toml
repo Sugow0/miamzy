@@ -1,0 +1,3 @@
+[test]
+# Prépare la base de test (création, migrations) avant tout fichier de test.
+preload = ["./test/setup.ts"]

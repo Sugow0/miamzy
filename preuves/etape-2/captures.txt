@@ -1,0 +1,151 @@
+# Étape 2 : erreurs
+
+### A. Commande inconnue -> 404
+$ curl -si http://localhost:3000/v1/orders/00000000-0000-7000-8000-000000000000
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:54:43 GMT
+Content-Length: 103
+
+{
+  "error": {
+    "code": "ORDER_NOT_FOUND",
+    "message": "Aucune commande ne porte cet identifiant.",
+    "details": []
+  }
+}
+
+### B. Panier vide -> 422, avec ce qu'il faut corriger
+$ curl -si -X POST http://localhost:3000/v1/orders -H content-type: application/json -d {"userId":"01a1f8be-2e45-7521-90a5-b3617692e018","restaurantId":"01a1f8be-2e3f-7473-b5b9-5694f4d895a7","items":[]}
+HTTP/1.1 422 Unprocessable Entity
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:54:43 GMT
+Content-Length: 171
+
+{
+  "error": {
+    "code": "EMPTY_CART",
+    "message": "Le panier est vide : ajoutez au moins un plat dans 'items'.",
+    "details": [
+      {
+        "field": "items",
+        "issue": "au moins 1 élément requis"
+      }
+    ]
+  }
+}
+
+### C. JSON illisible -> 400 (jamais 500)
+$ curl -si -X POST http://localhost:3000/v1/orders -H content-type: application/json -d {"userId": 
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:54:43 GMT
+Content-Length: 109
+
+{
+  "error": {
+    "code": "INVALID_JSON",
+    "message": "Le corps de la requête n'est pas un JSON lisible.",
+    "details": []
+  }
+}
+
+### D. Corps vide -> 400
+$ curl -si -X POST http://localhost:3000/v1/orders -H content-type: application/json
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:54:43 GMT
+Content-Length: 109
+
+{
+  "error": {
+    "code": "INVALID_JSON",
+    "message": "Le corps de la requête n'est pas un JSON lisible.",
+    "details": []
+  }
+}
+
+### E. Mauvais type -> 422
+$ curl -si -X POST http://localhost:3000/v1/orders -H content-type: application/json -d {"userId":"01a1f8be-2e45-7521-90a5-b3617692e018","restaurantId":"01a1f8be-2e3f-7473-b5b9-5694f4d895a7","items":[{"dishId":"01a1f8be-2e41-7df1-9ca8-23c3b0882620","quantity":"deux"}]}
+HTTP/1.1 422 Unprocessable Entity
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:54:43 GMT
+Content-Length: 184
+
+{
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "Le corps de la requête est invalide : voir 'details'.",
+    "details": [
+      {
+        "field": "items.0.quantity",
+        "issue": "doit être un nombre entier"
+      }
+    ]
+  }
+}
+
+### F. Identifiant invalide -> 400
+$ curl -si http://localhost:3000/v1/orders/pas-un-uuid
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:54:43 GMT
+Content-Length: 185
+
+{
+  "error": {
+    "code": "INVALID_PARAMETER",
+    "message": "Un paramètre de la requête est invalide ou manquant : voir 'details'.",
+    "details": [
+      {
+        "field": "id",
+        "issue": "doit être un UUID valide"
+      }
+    ]
+  }
+}
+
+### G. Route inconnue -> 404, même forme
+$ curl -si http://localhost:3000/v1/inconnue
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:54:43 GMT
+Content-Length: 87
+
+{
+  "error": {
+    "code": "ROUTE_NOT_FOUND",
+    "message": "Cette route n'existe pas.",
+    "details": []
+  }
+}
+
+### H. Plat inconnu -> 404
+$ curl -si -X POST http://localhost:3000/v1/orders -H content-type: application/json -d {"userId":"01a1f8be-2e45-7521-90a5-b3617692e018","restaurantId":"01a1f8be-2e3f-7473-b5b9-5694f4d895a7","items":[{"dishId":"00000000-0000-7000-8000-000000000000","quantity":1}]}
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+Date: Fri, 20 Nov 2026 13:54:43 GMT
+Content-Length: 146
+
+{
+  "error": {
+    "code": "DISH_NOT_FOUND",
+    "message": "Un plat de la commande n'existe pas.",
+    "details": [
+      {
+        "field": "items.0.dishId",
+        "issue": "plat inconnu"
+      }
+    ]
+  }
+}
+
+### Vérification : toutes les erreurs ont exactement la même forme
+OK   A (HTTP 404)
+OK   B (HTTP 422)
+OK   C (HTTP 400)
+OK   D (HTTP 400)
+OK   E (HTTP 422)
+OK   F (HTTP 400)
+OK   G (HTTP 404)
+OK   H (HTTP 404)

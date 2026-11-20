@@ -1,0 +1,82 @@
+# Étape 4 : paiement idempotent
+
+### A. La même clé envoyée 3 fois (commande 01a1f93f-0b75-76a3-bd86-9be606df74ae)
+envoi 1 -> HTTP 201 | sha256(corps) = d743bd0fdb13e3d8
+envoi 2 -> HTTP 201 | sha256(corps) = d743bd0fdb13e3d8
+envoi 3 -> HTTP 201 | sha256(corps) = d743bd0fdb13e3d8
+corps (identique aux 3 envois) :
+{
+  "id": "01a1f93f-0b94-7f00-ba91-2664f2772199",
+  "orderId": "01a1f93f-0b75-76a3-bd86-9be606df74ae",
+  "method": "card",
+  "status": "succeeded",
+  "amountCents": 840,
+  "currency": "EUR",
+  "createdAt": "2026-11-20T13:57:00.946Z"
+}
+
+table payments pour cette commande (attendu : 1 ligne) :
+                  id                  |               order_id               |   idempotency_key    | amount_cents | currency |  status   
+--------------------------------------+--------------------------------------+----------------------+--------------+----------+-----------
+ 01a1f93f-0b94-7f00-ba91-2664f2772199 | 01a1f93f-0b75-76a3-bd86-9be606df74ae | capture-1795183020-A |          840 | EUR      | succeeded
+(1 row)
+
+### B. Une clé différente, pour une AUTRE commande -> un nouveau paiement
+commande 01a1f93f-0c66-742a-b9fd-f7410c175cb9 -> HTTP 201
+ paiements_pour_cette_commande 
+-------------------------------
+                             1
+(1 row)
+
+### C. Une clé différente sur la commande DÉJÀ PAYÉE -> refusé (jamais un deuxième débit)
+HTTP 409
+{"error":{"code":"ORDER_ALREADY_PAID","message":"Cette commande est déjà payée.","details":[]}}
+ paiements_pour_la_commande_a 
+------------------------------
+                            1
+(1 row)
+
+
+### D. La même clé réutilisée pour une autre commande -> refusé
+HTTP 409
+{"error":{"code":"IDEMPOTENCY_KEY_REUSED","message":"Cette clé d'idempotence a déjà servi pour une autre commande.","details":[]}}
+
+### E. Sans clé -> refusé avec un message clair
+HTTP 400
+{
+  "error": {
+    "code": "MISSING_HEADER",
+    "message": "L'en-tête Idempotency-Key est obligatoire pour cette requête.",
+    "details": [
+      {
+        "field": "Idempotency-Key",
+        "issue": "champ obligatoire"
+      }
+    ]
+  }
+}
+ paiements_pour_cette_commande 
+-------------------------------
+                             0
+(1 row)
+
+
+### F. Rejeu SIMULTANÉ : 5 envois en parallèle avec la même clé (réseau coupé + retries)
+envoi 1 -> HTTP 201 | sha256(corps) = 4bb28acddbc6ec58
+envoi 2 -> HTTP 201 | sha256(corps) = 4bb28acddbc6ec58
+envoi 3 -> HTTP 201 | sha256(corps) = 4bb28acddbc6ec58
+envoi 4 -> HTTP 201 | sha256(corps) = 4bb28acddbc6ec58
+envoi 5 -> HTTP 201 | sha256(corps) = 4bb28acddbc6ec58
+ paiements_pour_cette_commande 
+-------------------------------
+                             1
+(1 row)
+
+
+### G. 5 clés DIFFÉRENTES en parallèle sur la même commande (le cas 4 du TP : trois débits)
+statuts : 201 409 409 409 409 
+ paiements_pour_cette_commande 
+-------------------------------
+                             1
+(1 row)
+
