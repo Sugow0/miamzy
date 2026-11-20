@@ -65,16 +65,19 @@ model Dish {
 }
 
 model Order {
-  id           String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  userId       String      @map("user_id") @db.Uuid
-  restaurantId String      @map("restaurant_id") @db.Uuid
-  status       OrderStatus @default(pending)
-  totalCents   Int         @map("total_cents")
-  currency     String      @default("EUR") @db.Char(3)
-  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  id            String      @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId        String      @map("user_id") @db.Uuid
+  restaurantId  String      @map("restaurant_id") @db.Uuid
+  status        OrderStatus @default(pending)
+  totalCents    Int         @map("total_cents")
+  discountCents Int         @default(0) @map("discount_cents")
+  promoCode     String?     @map("promo_code")
+  currency      String      @default("EUR") @db.Char(3)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user       User        @relation(fields: [userId], references: [id])
   restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  promo      PromoCode?  @relation(fields: [promoCode], references: [code], onDelete: Restrict)
   items      OrderItem[]
   payment    Payment?
 
@@ -113,4 +116,16 @@ model Payment {
   order Order @relation(fields: [orderId], references: [id])
 
   @@map("payments")
+}
+
+model PromoCode {
+  code       String    @id
+  percentOff Int       @map("percent_off")
+  active     Boolean   @default(true)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  orders Order[]
+
+  @@map("promo_codes")
 }
