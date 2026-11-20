@@ -160,3 +160,26 @@ ORDER BY id;
 - `GET /v1/orders` est toujours ouvert à tous tant qu'il n'y a pas d'authentification (bloc 2).
 
 **Code de cette étape :** aucun changement. La pagination avait été écrite avec les routes de l'étape 1, puisque le contrat la définit. Cette PR apporte la décision justifiée et les preuves.
+
+## D8 – Paiement rejouable (étape 4)
+**Les quatre questions du TP :**
+- **Qui fabrique la clé ?** Le **client**, dans l'en-tête `Idempotency-Key`. Seul le client sait que « ce second envoi est le même paiement » : une clé générée par le serveur arriverait trop tard (c'est justement quand la réponse est perdue que le client réessaie).
+- **Où et combien de temps ?** Dans la table `payments` (`idempotency_key`, contrainte `UNIQUE`), **sans expiration** : la ligne de paiement existe de toute façon, et une clé qui expirerait rouvrirait la porte au double débit. Coût : l'index grossit avec les paiements. Alternative écartée : un cache à durée de vie (Redis, 24 h), qui perd la protection passé le délai et ajoute une infrastructure.
+- **Que renvoie le second envoi ?** **La même réponse** (même `201`, même corps), pas une erreur : pour le client, un rejeu réussi et le premier succès sont indiscernables, il n'a rien de spécial à gérer.
+- **Sans clé ?** Refus `400 MISSING_HEADER` : « L'en-tête Idempotency-Key est obligatoire pour cette requête. » On n'accepte pas un paiement non protégé « par défaut ».
+
+**Mécanisme :** dans une transaction, `SELECT … FOR UPDATE` sur la commande (deux requêtes sur la même commande passent l'une après l'autre), puis `INSERT … ON CONFLICT DO NOTHING RETURNING *`. La contrainte `UNIQUE` fait foi, pas un « chercher puis insérer » : c'est la seule version correcte quand deux requêtes arrivent en même temps. Si rien n'est inséré, on relit : clé connue pour cette commande = rejeu ; clé connue pour une autre = `409 IDEMPOTENCY_KEY_REUSED` ; sinon la commande est déjà payée avec une autre clé = `409 ORDER_ALREADY_PAID`.
+
+**Écart d'interprétation à connaître :** le TP dit « une clé différente crée un nouveau paiement ». Ici, une clé différente crée un nouveau paiement **pour une autre commande** ; pour une commande déjà payée, elle est refusée en 409. Raison : une commande ne se paie qu'une fois (`payments.order_id` est `UNIQUE`), et accepter une seconde clé sur la même commande, c'est exactement le double débit du cas 4 du TP (trois fois 20 €). À valider avec l'enseignant si la démo attend le contraire.
+
+**Vérifié** (`preuves/etape-4/captures.txt`, rejouable) :
+- même clé × 3 en séquence : 3 × `201`, empreinte du corps identique, 1 ligne dans `payments` ;
+- même clé × 5 **en parallèle** : 5 × `201`, corps identiques, 1 ligne ;
+- 5 clés différentes en parallèle sur une commande : 1 × `201` et 4 × `409`, 1 ligne ;
+- clé réutilisée sur une autre commande : `409` ; sans clé : `400`, 0 ligne.
+
+**Changement de code :** nouveau code d'erreur `MISSING_HEADER` (message dédié quand un en-tête obligatoire manque, pour tout le contrat, pas seulement ici). Le reste du mécanisme vient de l'étape 1.
+
+**Limites assumées :**
+- Aucune comparaison du corps au rejeu : aujourd'hui un seul moyen de paiement existe (`card`), donc le même envoi ne peut pas différer. Dès qu'il y en aura plusieurs, une clé rejouée avec un autre corps devra être refusée en 422.
+- Le paiement est simulé (aucun prestataire) : l'idempotence protège l'écriture en base, pas un vrai débit chez un tiers, qui exigerait sa propre clé d'idempotence côté prestataire.

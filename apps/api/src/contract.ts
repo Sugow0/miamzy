@@ -165,6 +165,22 @@ export function validateParameters(
     if (value !== undefined) values[key(p)] = value;
   }
   if (!info.paramValidator(values)) {
+    const errors = info.paramValidator.errors ?? [];
+    // En-tête obligatoire absent : un message dédié, pour que le client sache quoi ajouter.
+    const missingHeaders = errors
+      .filter((e) => e.keyword === "required")
+      .map((e) => info.aliases.get(e.params.missingProperty))
+      .filter((name) =>
+        info.paramSpecs.some((p) => p.in === "header" && p.name === name),
+      );
+    if (missingHeaders.length > 0) {
+      throw new ApiError(
+        400,
+        "MISSING_HEADER",
+        `L'en-tête ${missingHeaders.join(", ")} est obligatoire pour cette requête.`,
+        toDetails(errors, info.aliases),
+      );
+    }
     throw new ApiError(
       400,
       "INVALID_PARAMETER",
