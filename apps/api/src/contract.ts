@@ -7,6 +7,7 @@ import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { parse } from "yaml";
 import { ApiError, type ErrorDetail } from "./errors";
+import { issueFor } from "./messages";
 
 type JsonSchema = Record<string, unknown>;
 type Ref = { $ref: string };
@@ -137,7 +138,7 @@ function toDetails(
     if (e.keyword === "additionalProperties")
       path.push(e.params.additionalProperty);
     const field = path.map((p) => aliases.get(p) ?? p).join(".");
-    return { field: field || "(corps)", issue: e.message ?? "valeur invalide" };
+    return { field: field || "(corps)", issue: issueFor(e) };
   });
 }
 
