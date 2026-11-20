@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Miamzy API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     API de livraison de repas Miamzy. Contrat source de vérité (contract-first).
 
@@ -11,6 +11,15 @@ info:
     - Dates : ISO 8601 en UTC avec `Z`. Le front convertit en `Europe/Paris`.
     - Erreurs : un seul format (`Error`).
     - Pas d'authentification dans cette version (bloc 2).
+
+    Historique :
+    - 1.1.0 (additif, aucune rupture, pas de v2) : codes promo. Requête
+      `POST /v1/orders` : champ optionnel `promoCode`. Réponse `Order` : champs
+      `discountCents` et `promoCode` ajoutés, présents seulement si un code a été
+      appliqué (une commande sans code ne change pas d'un octet). Nouvelle erreur 422
+      `PROMO_CODE_INVALID`. Aucun champ renommé, supprimé ni rendu obligatoire
+      côté requête ; `totalCents` garde son sens (le montant à payer).
+    - 1.0.0 : version initiale.
 servers:
   - url: http://localhost:3000
 tags:
@@ -59,6 +68,12 @@ paths:
         Erreurs métier : un `dishId` inconnu donne 404 (`DISH_NOT_FOUND`) ; un plat
         d'un autre restaurant, un plat en double ou un panier vide donnent 422
         (`DISH_NOT_IN_RESTAURANT`, `DUPLICATE_DISH`, `EMPTY_CART`).
+
+        Code promo (1.1.0) : remise en pourcentage sur la somme des lignes,
+        arrondie à l'entier le plus proche, 0,5 vers le haut
+        (`remise = floor((somme × pourcentage + 50) / 100)`). Un code inconnu,
+        désactivé ou expiré donne la même réponse 422 `PROMO_CODE_INVALID`, pour
+        ne pas révéler quels codes existent.
       requestBody:
         required: true
         content:
@@ -271,6 +286,21 @@ components:
         totalCents:
           type: integer
           minimum: 0
+          description: >-
+            Montant à payer, remise déduite
+            (somme des lignes - `discountCents`).
+        discountCents:
+          type: integer
+          minimum: 1
+          description: >-
+            Remise appliquée, en centimes. Présent UNIQUEMENT si un code promo a
+            été appliqué (ajouté en 1.1.0) : une commande sans code est
+            identique, octet pour octet, à celle de la 1.0.0.
+        promoCode:
+          type: string
+          description: >-
+            Code promo appliqué. Présent UNIQUEMENT avec `discountCents`
+            (ajouté en 1.1.0).
         currency:
           $ref: "#/components/schemas/Currency"
         createdAt:
@@ -301,6 +331,12 @@ components:
         userId:
           type: string
           format: uuid
+        promoCode:
+          type: string
+          pattern: "^[A-Z0-9]{3,20}$"
+          description: >-
+            Code promo, optionnel (ajouté en 1.1.0). Une requête sans ce champ se
+            comporte exactement comme en 1.0.0.
         items:
           type: array
           minItems: 1

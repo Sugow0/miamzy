@@ -224,3 +224,47 @@ ORDER BY id;
 **Effet de bord pour la suite :** les scripts de preuve des étapes 1 à 5 enchaînent plus de 60 requêtes (par exemple le parcours des 51 pages). Pour les rejouer : `RATE_LIMIT_CAPACITY=100000`.
 
 **Limite assumée :** pas d'en-têtes `RateLimit-Remaining` sur les réponses réussies (non déclarés dans le contrat). Le contrat n'a pas changé.
+
+## D11 – Codes promo sans casse (étape 7)
+**Contexte :** 40 000 applications installées, qu'on ne peut pas forcer à se mettre à jour. Le contrat passe en **1.1.0**.
+
+**Ce qui est ajouté, et si ça casse :**
+| Changement | Casse ? | Pourquoi |
+|---|---|---|
+| `POST /v1/orders` : champ **optionnel** `promoCode` | Non | Une ancienne app ne l'envoie pas : sa requête est acceptée comme avant. |
+| Réponse `Order` : champs `discountCents` et `promoCode`, présents **seulement si un code a été appliqué** | Non | Une commande sans code est identique, octet pour octet, à celle de la 1.0.0. Une ancienne app n'envoie jamais de code : elle ne rencontre pas les nouveaux champs. **Risque résiduel, étroit :** une ancienne app à décodeur strict qui lirait la liste d'un utilisateur ayant passé une commande avec code depuis une app récente (elle ne casserait que sur ces commandes-là). |
+| Nouvelle erreur `422 PROMO_CODE_INVALID` | Non | Elle n'apparaît que si le client envoie un code, donc seulement pour du code écrit après la 1.1.0. |
+| `totalCents` | Non, **sens inchangé** | C'est toujours « le montant à payer ». Sans code promo : identique à avant. Avec : remise déduite. Un champ `totalCents` qui garderait le prix avant remise obligerait les anciennes apps à calculer la remise elles-mêmes. |
+
+**Décision révisée avant la mise en ligne.** Première version : `discountCents` et `promoCode` toujours présents dans la réponse (valeurs `0` et `null` sans code). Le contrôle de compatibilité avec le contrat 1.0.0 (`apps/api/scripts/compat.ts`) a montré qu'une app **stricte** (qui refuse une clé inconnue) aurait refusé **102 réponses sur 102**, y compris les commandes sans code. Cela reposait sur une hypothèse invérifiable ici (« les apps ignorent les champs inconnus ») avec un effet maximal si elle était fausse : toutes les commandes illisibles pour 40 000 apps. D'où le choix actuel : champs présents seulement avec un code. **Coût :** le contrat a deux propriétés optionnelles, et un client doit tester leur présence (au lieu de lire `0` / `null`). Acceptable : mieux vaut un client récent un peu plus verbeux qu'une rupture pour les anciens.
+
+**Ce qu'on n'a PAS fait (et pourquoi) :**
+- **Pas de renommage ni de suppression** : `totalCents` n'est pas devenu `subtotalCents` + `totalCents`, ce qui aurait changé le sens d'un champ lu par 40 000 apps.
+- **Pas de `v2`.** Une v2 n'est nécessaire que lorsqu'un champ existant change de sens, est supprimé ou devient obligatoire en entrée. Ici rien de tel. **`/v1` continue de fonctionner à l'identique** et n'est dépréciée à aucune date : elle est la version courante.
+- **Aucun champ obligatoire côté requête** : `promoCode` est optionnel.
+
+**Règles métier :**
+- Remise en pourcentage sur la somme des lignes. **Arrondi à l'entier le plus proche, 0,5 vers le haut** : `remise = floor((somme × pourcentage + 50) / 100)`. Exemple : 10 % de 4 505 centimes = 450,5 → **451**. Écrit dans le contrat et testé. Sans règle écrite, deux développeurs obtiendraient deux totaux différents.
+- **Un code inconnu, désactivé ou expiré donne la même réponse** (`422 PROMO_CODE_INVALID`, même message) : distinguer « n'existe pas » de « expiré » permettrait de deviner quels codes existent. Contrepartie : un client honnête ne sait pas pourquoi son code est refusé ; le message l'invite à vérifier le code.
+- `422` et pas `404` : le code promo n'est pas une ressource que le client adresse, c'est une donnée de sa requête qui est refusée.
+- Une commande avec code est stockée avec son `promoCode` et sa `discountCents` : le prix payé ne bouge plus si le pourcentage du code change ensuite (même logique que `unitPriceCents`).
+
+**Migration (« élargir, puis plus tard resserrer »)** : deux colonnes ajoutées à `orders` (`promo_code` nullable, `discount_cents` avec défaut 0) et une table `promo_codes`. Rien n'est modifié ni supprimé, donc l'ancien code et la nouvelle base cohabitent : on peut déployer la migration avant le code, ou revenir au code précédent sans toucher à la base.
+
+**Ordre des commits de cette PR** (le contrat d'abord, comme à l'étape 0) : contrat 1.1.0 → migration et seed → code → preuves. Le commit du contrat laisse volontairement `tsc` en erreur (`toOrder` ne respecte plus le contrat) : c'est le contrat qui pilote le code.
+
+**Note sur D7 :** la requête de la liste lit maintenant deux colonnes de plus (`promo_code`, `discount_cents`). Même forme, même plan (`LIMIT`, parcours de la clé primaire).
+
+**Vérifié** (`preuves/etape-7/captures.txt`, rejouable) :
+- même commande sans code : `totalCents` 1 680, **8 clés exactement, celles de la 1.0.0** ; avec `BIENVENUE10` : 1 512 = 1 680 − 168 de remise, avec `discountCents` et `promoCode` en plus ;
+- requête de la 1.0.0 (sans `promoCode`) : acceptée, réponse sans champ de remise ;
+- inconnu, expiré, désactivé : trois codes, **la même réponse au bit près** (même empreinte) ; `bienvenue10` en minuscules : refusé par le contrat (format) ;
+- **compatibilité avec le contrat 1.0.0** sur 102 réponses (2 commandes créées + 100 de la liste) : app tolérante, **aucune rupture** ; app stricte, **2 refusées sur 102** (les deux commandes avec code), contre 102 sur 102 avant la révision ;
+- arrondi : 4 505 × 10 % = 450,50 → **451** ; 4 504 × 10 % = 450,40 → 450 ; 1 × 50 % → 1 ; 1 × 49 % → 0 ;
+- base : total = somme des lignes − remise pour toutes les commandes (0 écart) ; les 5 000+ commandes d'avant ont `promo_code` nul et `discount_cents` à 0.
+
+**Limites assumées :**
+- Aucune application mobile réelle n'a été testée : « app tolérante / stricte » sont deux modèles de décodeurs, pas les vraies apps. Avant de publier, faire valider par l'équipe mobile.
+- Le risque résiduel (ancienne app stricte lisant une commande avec code) est étroit mais pas nul.
+- `GET /v1/orders` n'a pas de filtre pour masquer les commandes avec code aux anciennes versions : sans authentification, l'API ne sait pas quelle version d'app l'appelle.
+- Les codes promo n'ont pas d'API de gestion (création, désactivation) : ils sont insérés par seed ou en SQL. Hors des cinq besoins du TP.

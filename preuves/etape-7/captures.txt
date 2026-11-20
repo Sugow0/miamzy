@@ -1,0 +1,79 @@
+# Étape 7 : codes promo, sans casse
+
+### A. La même commande SANS code promo (comportement de la 1.0.0)
+HTTP 201
+{
+  "totalCents": 1680,
+  "clefs_de_la_reponse": [
+    "createdAt",
+    "currency",
+    "id",
+    "items",
+    "restaurantId",
+    "status",
+    "totalCents",
+    "userId"
+  ],
+  "items": [
+    {
+      "name": "Menu enfant",
+      "quantity": 2,
+      "unitPriceCents": 840
+    }
+  ]
+}
+
+### B. La même commande AVEC le code BIENVENUE10 (10 %)
+HTTP 201
+{
+  "totalCents": 1512,
+  "clefs_de_la_reponse": [
+    "createdAt",
+    "currency",
+    "discountCents",
+    "id",
+    "items",
+    "promoCode",
+    "restaurantId",
+    "status",
+    "totalCents",
+    "userId"
+  ],
+  "items": [
+    {
+      "name": "Menu enfant",
+      "quantity": 2,
+      "unitPriceCents": 840
+    }
+  ]
+}
+
+Contrôle : 1680 (sans code) - 168 (remise) = 1512 ; total avec code = 1512
+
+### C. Codes refusés : inconnu, expiré, désactivé -> la MÊME réponse (on ne révèle pas quels codes existent)
+INCONNU99  -> HTTP 422 | empreinte du corps faf8fdd01b9a448c
+EXPIRE5    -> HTTP 422 | empreinte du corps faf8fdd01b9a448c
+INACTIF15  -> HTTP 422 | empreinte du corps faf8fdd01b9a448c
+{"error":{"code":"PROMO_CODE_INVALID","message":"Ce code promo n'est pas valable : vérifiez le code saisi.","details":[{"field":"promoCode","issue":"code inconnu, désactivé ou expiré"}]}}
+minuscules (bienvenue10) -> HTTP 422 {"code":"VALIDATION_FAILED","details":[{"field":"promoCode","issue":"format invalide"}]}
+
+### D. Une ANCIENNE application : requête de la 1.0.0 (sans promoCode), inchangée
+HTTP 201 -> ["createdAt","currency","id","items","restaurantId","status","totalCents","userId"]
+
+### E. Une ancienne application sait-elle LIRE les réponses d'aujourd'hui ? (contrat 1.0.0)
+Réponses testées : commande sans code, commande avec code, et 100 commandes de la liste.
+102 réponse(s) validée(s) contre Order de l'ancien contrat
+  app TOLÉRANTE (ignore les champs inconnus) : OK, aucune rupture
+  app STRICTE   (refuse un champ inconnu)    : 2 refusée(s) : champ inconnu « discountCents », champ inconnu « promoCode »
+
+### F. Arrondi : 0,5 vers le haut (règle du contrat), calculé en entiers
+4505 centimes x 10 % = 450.50 -> remise 451
+4504 centimes x 10 % = 450.40 -> remise 450
+1 centimes x 50 % = 0.50 -> remise 1
+1 centimes x 49 % = 0.49 -> remise 0
+2420 centimes x 10 % = 242.00 -> remise 242
+
+### G. Cohérence en base : total = somme des lignes - remise, et les anciennes commandes sont intactes
+commandes dont total <> somme des lignes - remise : 0
+commandes sans code promo (remise 0) : 5002
+commandes avec code promo : 1

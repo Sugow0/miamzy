@@ -5,7 +5,14 @@
 -- ATTENTION : vide toutes les tables avant d'insérer.
 -- Exécuté en un seul bloc, donc dans une seule transaction implicite.
 
-TRUNCATE payments, order_items, orders, dishes, restaurants, users;
+TRUNCATE payments, order_items, orders, dishes, restaurants, users, promo_codes;
+
+-- Codes promo : un valide, un valide à 20 %, un expiré, un désactivé ----------
+INSERT INTO promo_codes (code, percent_off, active, expires_at) VALUES
+  ('BIENVENUE10', 10, true,  NULL),
+  ('ETE20',       20, true,  now() + interval '1 year'),
+  ('EXPIRE5',      5, true,  now() - interval '1 day'),
+  ('INACTIF15',   15, false, NULL);
 
 -- Restaurants ---------------------------------------------------------------
 INSERT INTO restaurants (name)

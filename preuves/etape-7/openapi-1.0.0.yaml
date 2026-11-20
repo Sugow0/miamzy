@@ -1,0 +1,472 @@
+openapi: 3.1.0
+info:
+  title: Miamzy API
+  version: 1.0.0
+  description: |
+    API de livraison de repas Miamzy. Contrat source de vérité (contract-first).
+
+    Conventions (voir DECISIONS.md D1) :
+    - Identifiants : UUID v7.
+    - Montants : entier en plus petite unité (`totalCents`) + `currency` ISO 4217.
+    - Dates : ISO 8601 en UTC avec `Z`. Le front convertit en `Europe/Paris`.
+    - Erreurs : un seul format (`Error`).
+    - Pas d'authentification dans cette version (bloc 2).
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: orders
+  - name: payments
+  - name: users
+
+paths:
+  /v1/orders:
+    get:
+      tags: [orders]
+      operationId: listOrders
+      summary: Lister les commandes, du plus récent au plus ancien
+      description: |
+        Retourne une page de commandes. Sans paramètre : les 20 plus récentes.
+        `limit` au-dessus de 100 est refusé (400), jamais tronqué silencieusement.
+        Sans authentification, la liste n'est pas restreinte à l'appelant :
+        utiliser `userId` pour filtrer.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: userId
+          in: query
+          description: Ne retourne que les commandes de cet utilisateur.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Une page de commandes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      tags: [orders]
+      operationId: createOrder
+      summary: Créer une commande dans un restaurant
+      description: |
+        Les prix sont lus en base, jamais fournis par le client : `totalCents`
+        est calculé par le serveur.
+        Erreurs métier : un `dishId` inconnu donne 404 (`DISH_NOT_FOUND`) ; un plat
+        d'un autre restaurant, un plat en double ou un panier vide donnent 422
+        (`DISH_NOT_IN_RESTAURANT`, `DUPLICATE_DISH`, `EMPTY_CART`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: Commande créée.
+          headers:
+            Location:
+              description: URL de la commande créée.
+              schema:
+                type: string
+                examples: ["/v1/orders/0192f3a4-7b1c-7d2e-9f3a-4b5c6d7e8f90"]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/orders/{id}:
+    get:
+      tags: [orders]
+      operationId: getOrder
+      summary: Voir une commande
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: La commande.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/orders/{id}/payments:
+    post:
+      tags: [payments]
+      operationId: payOrder
+      summary: Payer une commande (rejouable)
+      description: |
+        Le montant est celui de la commande, jamais fourni par le client.
+        Rejouer la même requête avec la même `Idempotency-Key` ne crée aucun
+        paiement supplémentaire et retourne exactement la même réponse
+        (même statut, même corps). Une autre clé sur une commande déjà payée
+        est refusée (409).
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Clé choisie par le client, unique par intention de paiement.
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayOrderRequest"
+      responses:
+        "201":
+          description: Paiement enregistré (ou rejoué à l'identique).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/users/{id}:
+    get:
+      tags: [users]
+      operationId: getUser
+      summary: Voir le profil d'un utilisateur
+      description: |
+        Profil public uniquement. L'e-mail, le téléphone et le mot de passe
+        ne sont jamais retournés, par aucune route.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Le profil.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+components:
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      description: "Taille de page. Défaut 20, maximum 100 (au-delà : 400)."
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      description: Curseur opaque (champ `nextCursor` de la page précédente).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 512
+
+  schemas:
+    Currency:
+      type: string
+      description: Code devise ISO 4217.
+      pattern: "^[A-Z]{3}$"
+      examples: ["EUR"]
+    Timestamp:
+      type: string
+      format: date-time
+      description: Instant en UTC, ISO 8601 avec `Z`.
+      examples: ["2026-12-10T12:00:00Z"]
+
+    OrderStatus:
+      type: string
+      enum: [pending, paid]
+
+    OrderItem:
+      type: object
+      required: [dishId, name, quantity, unitPriceCents]
+      additionalProperties: false
+      properties:
+        dishId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unitPriceCents:
+          type: integer
+          minimum: 0
+          description: Prix unitaire figé au moment de la commande.
+
+    Order:
+      type: object
+      required:
+        [
+          id,
+          userId,
+          restaurantId,
+          status,
+          items,
+          totalCents,
+          currency,
+          createdAt,
+        ]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        restaurantId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        totalCents:
+          type: integer
+          minimum: 0
+        currency:
+          $ref: "#/components/schemas/Currency"
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    OrderPage:
+      type: object
+      required: [data, nextCursor]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/Order"
+        nextCursor:
+          type: [string, "null"]
+          description: Curseur de la page suivante, `null` s'il n'y en a pas.
+
+    CreateOrderRequest:
+      type: object
+      required: [restaurantId, userId, items]
+      additionalProperties: false
+      properties:
+        restaurantId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [dishId, quantity]
+            additionalProperties: false
+            properties:
+              dishId:
+                type: string
+                format: uuid
+              quantity:
+                type: integer
+                minimum: 1
+                maximum: 99
+
+    PayOrderRequest:
+      type: object
+      required: [method]
+      additionalProperties: false
+      properties:
+        method:
+          type: string
+          enum: [card]
+
+    Payment:
+      type: object
+      required: [id, orderId, method, status, amountCents, currency, createdAt]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        method:
+          type: string
+          enum: [card]
+        status:
+          type: string
+          enum: [succeeded]
+        amountCents:
+          type: integer
+          minimum: 0
+        currency:
+          $ref: "#/components/schemas/Currency"
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    User:
+      type: object
+      description: Profil public. Aucun champ sensible.
+      required: [id, firstName, createdAt]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+
+    ErrorDetail:
+      type: object
+      required: [field, issue]
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+          description: Champ ou paramètre en cause (ex. `items`, `limit`).
+        issue:
+          type: string
+          description: Ce qu'il faut corriger.
+
+    Error:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              description: Code stable, destiné au programme (jamais `message`).
+              examples: ["ORDER_NOT_FOUND"]
+            message:
+              type: string
+              description: Phrase lisible qui dit ce qu'il faut corriger.
+            details:
+              type: array
+              items:
+                $ref: "#/components/schemas/ErrorDetail"
+
+  responses:
+    BadRequest:
+      description: >-
+        Requête illisible : JSON invalide, paramètre de requête invalide
+        (dont `limit` > 100), en-tête obligatoire manquant (`Idempotency-Key`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: INVALID_QUERY_PARAMETER
+              message: "Le paramètre 'limit' doit être compris entre 1 et 100."
+              details:
+                - field: limit
+                  issue: maximum 100
+    NotFound:
+      description: Ressource inconnue (commande, restaurant, plat ou utilisateur).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: ORDER_NOT_FOUND
+              message: Aucune commande ne porte cet identifiant.
+              details: []
+    Conflict:
+      description: >-
+        Conflit d'état : commande déjà payée avec une autre clé d'idempotence,
+        ou clé déjà utilisée pour une autre commande.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: ORDER_ALREADY_PAID
+              message: Cette commande est déjà payée.
+              details: []
+    UnprocessableEntity:
+      description: JSON lisible mais règle violée (panier vide, quantité nulle, restaurant fermé).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: EMPTY_CART
+              message: "Le panier est vide : ajoutez au moins un plat dans 'items'."
+              details:
+                - field: items
+                  issue: au moins 1 élément requis
+    TooManyRequests:
+      description: Limite de requêtes dépassée.
+      headers:
+        Retry-After:
+          description: Secondes à attendre avant de réessayer.
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: RATE_LIMITED
+              message: Trop de requêtes. Réessayez dans 12 secondes.
+              details: []
