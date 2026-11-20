@@ -254,3 +254,17 @@ ORDER BY id;
 **Ordre des commits de cette PR** (le contrat d'abord, comme à l'étape 0) : contrat 1.1.0 → migration et seed → code → preuves. Le commit du contrat laisse volontairement `tsc` en erreur (`toOrder` ne respecte plus le contrat) : c'est le contrat qui pilote le code.
 
 **Note sur D7 :** la requête de la liste lit maintenant deux colonnes de plus (`promo_code`, `discount_cents`). Même forme, même plan (`LIMIT`, parcours de la clé primaire).
+
+**Vérifié** (`preuves/etape-7/captures.txt`, rejouable) :
+- même commande sans code : `totalCents` 1 680, **8 clés exactement, celles de la 1.0.0** ; avec `BIENVENUE10` : 1 512 = 1 680 − 168 de remise, avec `discountCents` et `promoCode` en plus ;
+- requête de la 1.0.0 (sans `promoCode`) : acceptée, réponse sans champ de remise ;
+- inconnu, expiré, désactivé : trois codes, **la même réponse au bit près** (même empreinte) ; `bienvenue10` en minuscules : refusé par le contrat (format) ;
+- **compatibilité avec le contrat 1.0.0** sur 102 réponses (2 commandes créées + 100 de la liste) : app tolérante, **aucune rupture** ; app stricte, **2 refusées sur 102** (les deux commandes avec code), contre 102 sur 102 avant la révision ;
+- arrondi : 4 505 × 10 % = 450,50 → **451** ; 4 504 × 10 % = 450,40 → 450 ; 1 × 50 % → 1 ; 1 × 49 % → 0 ;
+- base : total = somme des lignes − remise pour toutes les commandes (0 écart) ; les 5 000+ commandes d'avant ont `promo_code` nul et `discount_cents` à 0.
+
+**Limites assumées :**
+- Aucune application mobile réelle n'a été testée : « app tolérante / stricte » sont deux modèles de décodeurs, pas les vraies apps. Avant de publier, faire valider par l'équipe mobile.
+- Le risque résiduel (ancienne app stricte lisant une commande avec code) est étroit mais pas nul.
+- `GET /v1/orders` n'a pas de filtre pour masquer les commandes avec code aux anciennes versions : sans authentification, l'API ne sait pas quelle version d'app l'appelle.
+- Les codes promo n'ont pas d'API de gestion (création, désactivation) : ils sont insérés par seed ou en SQL. Hors des cinq besoins du TP.
