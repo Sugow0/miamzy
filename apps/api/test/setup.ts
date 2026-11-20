@@ -48,4 +48,5 @@ if (migrate.exitCode !== 0) {
 }
 
 // 3. Toute réponse qui s'écarte du contrat devient une 500 : les tests la voient.
-process.env.VALIDATE_RESPONSES = "true";
+//    (VALIDATE_RESPONSES=false le désactive : utile pour vérifier que les tests détectent seuls.)
+process.env.VALIDATE_RESPONSES ??= "true";
