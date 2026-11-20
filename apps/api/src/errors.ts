@@ -11,6 +11,7 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly details: ErrorDetail[] = [],
+    readonly headers: Record<string, string> = {},
   ) {
     super(message);
   }
