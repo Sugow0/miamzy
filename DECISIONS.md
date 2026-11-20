@@ -117,3 +117,46 @@ Pas de verbe dans les URLs, tout sous `/v1` (la version est dans l'URL : visible
 **Jamais de 500 pour une entrée client :** JSON illisible et corps vide donnent 400. Les vraies erreurs serveur sont journalisées côté serveur et renvoyées avec un message générique (aucun détail interne au client).
 **Vérifié :** 8 cas (404 commande, 422 panier vide, 400 JSON cassé, 400 corps vide, 422 mauvais type, 400 UUID invalide, 404 route inconnue, 404 plat inconnu) : `jq` contrôle que chaque corps a exactement les clés `error.code`, `error.details`, `error.message`.
 **Limite assumée :** les 5xx ne sont pas déclarés dans le contrat (ni donc validés par `VALIDATE_RESPONSES`).
+
+## D7 – Pagination (étape 3)
+**Choix :**
+- **Défaut 20, maximum 100.** Un écran mobile affiche une vingtaine de commandes ; 100 couvre un export raisonnable sans que une réponse dépasse quelques dizaines de ko.
+- **Curseur, pas numéro de page.** Les commandes arrivent en continu : avec `?page=3`, une commande créée entre deux requêtes décale tout (doublons ou trous). Le curseur (« après cet id ») reste stable. Il est opaque pour le client (id encodé en base64url).
+- **Au-delà du maximum : refus 400, pas de troncature silencieuse.** Un client qui demande 100 000 lignes doit savoir qu'il n'aura pas tout, sinon il croira avoir l'intégralité des données. La borne est dans le contrat (`maximum: 100`), donc c'est le validateur dérivé du contrat qui refuse : aucun `if` à maintenir dans le code.
+- **La base lit peu, le code ne tranche pas.** `LIMIT limit + 1` : la ligne en trop dit s'il existe une page suivante, sans `COUNT(*)`.
+
+**Requêtes exécutées (copiées du code, `src/routes/orders.ts`) :**
+```sql
+-- page (les deux filtres sont optionnels)
+SELECT id, user_id, restaurant_id, status, total_cents, currency, created_at
+FROM orders
+WHERE true
+  AND id < $cursor            -- si un curseur est fourni
+  AND user_id = $userId       -- si ?userId= est fourni
+ORDER BY id DESC
+LIMIT $limit + 1;
+
+-- lignes de toutes les commandes de la page, en UNE requête (pas de N+1)
+SELECT order_id, dish_id, name, quantity, unit_price_cents
+FROM order_items
+WHERE order_id IN ($id1, …, $idN)
+ORDER BY id;
+```
+**Pourquoi `ORDER BY id` suffit :** `id` est un UUIDv7, donc l'ordre des id est l'ordre chronologique : `ORDER BY id DESC` = « le plus récent d'abord », et la clé primaire sert d'index de tri. Aucun index supplémentaire n'est nécessaire pour la liste générale.
+
+**Preuve que la base lit seulement la page** (`preuves/etape-3/explain.txt`, `EXPLAIN ANALYZE`, table de 5 004 commandes) :
+| Requête | Lignes lues |
+|---|---|
+| page par défaut (`LIMIT 21`) | 21 (Index Scan Backward sur `orders_pkey`) |
+| page maximale (`LIMIT 101`) | 101 |
+| page suivante (`id < curseur`) | 21 |
+| lignes de commande de 20 commandes | 1 requête, 44 lignes |
+
+**Vérifié :** sans paramètre = 20 lignes ; `limit=100` = 100 ; `limit=100000` et `limit=0` = 400 ; curseur invalide = 400 ; parcours complet en 51 pages de 100 = 5 004 commandes, 5 004 ids distincts.
+
+**Limites assumées (non masquées) :**
+- Filtre `?userId=` : avec 25 commandes par utilisateur, le planificateur lit les 25 puis trie, ce qui est le bon choix à cette taille. Avec 20 000 commandes pour un seul utilisateur (transaction annulée), il lit 21 lignes. **Ce test est favorable** : les commandes ajoutées sont les plus récentes, donc elles sont en tête de l'index. Un gros client dont les commandes sont dispersées dans le temps n'est pas couvert par cette preuve.
+- Le curseur est un id seul : il n'est pas signé. Un client peut en fabriquer un valide, ce qui est sans conséquence (il ne fait que choisir un point de départ) mais il n'authentifie rien.
+- `GET /v1/orders` est toujours ouvert à tous tant qu'il n'y a pas d'authentification (bloc 2).
+
+**Code de cette étape :** aucun changement. La pagination avait été écrite avec les routes de l'étape 1, puisque le contrat la définit. Cette PR apporte la décision justifiée et les preuves.
